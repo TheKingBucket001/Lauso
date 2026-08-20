@@ -21,6 +21,21 @@
 
 LauSo 是为 ColorOS 系统桌面设计的 LSPosed 模块。它在应用图标长按菜单中加入可按应用配置的标语，并提供菜单外观与系统菜单项管理。
 
+## 效果展示
+
+LauSo 让应用专属文字自然融入系统桌面的长按菜单：既能保留完整的信息层次，也能呈现简洁利落的操作面板。
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="assets/showcase/long-press-layered.png" alt="LauSo 完整呈现效果：主标语、副标语与系统操作分区清晰显示" /></td>
+    <td align="center" width="50%"><img src="assets/showcase/long-press-concise.jpg" alt="LauSo 简洁呈现效果：主标语、副标语与系统操作紧凑清晰显示" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>完整呈现</strong><br />主标语、副标语与系统操作分区清晰显示。</td>
+    <td align="center"><strong>简洁呈现</strong><br />在更轻巧的版面中保留核心信息与操作。</td>
+  </tr>
+</table>
+
 ## 下载
 
 - [最新版本](https://github.com/TheKingBucket001/Lauso/releases/latest)

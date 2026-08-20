@@ -12,6 +12,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.content.res.ColorStateList;
 import android.text.SpannableStringBuilder;
@@ -183,8 +184,8 @@ public final class LauncherSloganModule extends XposedModule {
                 }
                 Object result = chain.proceed();
                 try {
-                    // Oplus starts this AnimatorSet only after this callback returns. Its own
-                    // method may reset the first divider, so restore it after that work.
+                    // Oplus starts this AnimatorSet only after this callback returns. Rebuild
+                    // the first divider only when the LauSo row created that boundary.
                     restoreNormalNativeDividersBeforeOpenAnimation(chain.getThisObject());
                 } catch (Throwable error) {
                     log(Log.WARN, TAG, "Unable to restore regular-menu divider", error);
@@ -207,7 +208,18 @@ public final class LauncherSloganModule extends XposedModule {
                 } catch (Throwable error) {
                     log(Log.WARN, TAG, "Unable to keep popup material during close", error);
                 }
-                return chain.proceed();
+                Object popup = chain.getThisObject();
+                Object closeAnimation = chain.getArg(0);
+                Object result;
+                try {
+                    result = chain.proceed();
+                } catch (Throwable error) {
+                    // No close animation will own cleanup when the native builder fails.
+                    clearPopupMaterialState(popup);
+                    throw error;
+                }
+                schedulePopupMaterialCleanup(popup, closeAnimation);
+                return result;
             });
         } catch (Throwable error) {
             log(Log.WARN, TAG, "Close material hook unavailable", error);
@@ -275,46 +287,86 @@ public final class LauncherSloganModule extends XposedModule {
                 "AppShare",
                 "AppEdit",
         };
+        Class<?> activityClass;
+        Class<?> itemInfoClass;
         try {
-            Class<?> activityClass = Class.forName(
+            activityClass = Class.forName(
                     "com.android.launcher3.BaseDraggingActivity", false, classLoader);
-            Class<?> itemInfoClass = Class.forName(
+            itemInfoClass = Class.forName(
                     "com.android.launcher3.model.data.ItemInfo", false, classLoader);
-            for (String entry : directEntries) {
-                Class<?> entryClass = Class.forName(shortcutBase + entry, false, classLoader);
-                Constructor<?> constructor = entryClass.getDeclaredConstructor(
-                        activityClass, itemInfoClass, View.class);
-                hook(constructor).intercept(chain -> {
-                    Object result = chain.proceed();
-                    Object shortcut = chain.getThisObject();
-                    Context context = shortcutContext(shortcut);
-                    if (context != null && MenuContentSettings.read(
-                            context, MenuContentSettings.DISABLE_LONG_PRESS_MENU)) {
-                        writeField(shortcut, "mMoreShortcut", true);
-                    }
-                    return result;
-                });
-            }
         } catch (Throwable error) {
-            log(Log.WARN, TAG, "More-functions flattening hooks unavailable", error);
+            log(Log.WARN, TAG, "More-functions constructor types unavailable", error);
+            return;
+        }
+        for (String entry : directEntries) {
+            installMoreFlatteningConstructorHook(
+                    classLoader, shortcutBase, activityClass, itemInfoClass, entry);
+        }
+    }
+
+    private void installMoreFlatteningConstructorHook(
+            ClassLoader classLoader,
+            String shortcutBase,
+            Class<?> activityClass,
+            Class<?> itemInfoClass,
+            String entry) {
+        String className = shortcutBase + entry;
+        try {
+            Class<?> entryClass = Class.forName(className, false, classLoader);
+            Constructor<?> constructor = entryClass.getDeclaredConstructor(
+                    activityClass, itemInfoClass, View.class);
+            hook(constructor).intercept(chain -> {
+                Object result = chain.proceed();
+                Object shortcut = chain.getThisObject();
+                Context context = shortcutContext(shortcut);
+                if (context != null && MenuContentSettings.read(
+                        context, MenuContentSettings.DISABLE_LONG_PRESS_MENU)) {
+                    writeField(shortcut, "mMoreShortcut", true);
+                }
+                return result;
+            });
+        } catch (Throwable error) {
+            log(Log.WARN, TAG,
+                    "More-functions flattening hook unavailable for " + className, error);
         }
     }
 
     private void installDeepShortcutHooks(ClassLoader classLoader) {
+        final Class<?> itemInfoClass;
         try {
-            Class<?> itemInfoClass = Class.forName(
+            itemInfoClass = Class.forName(
                     "com.android.launcher3.model.data.ItemInfo", false, classLoader);
+        } catch (Throwable error) {
+            log(Log.WARN, TAG, "Deep-shortcut item type unavailable", error);
+            return;
+        }
+
+        try {
             Class<?> providerClass = Class.forName(
                     "com.android.launcher3.popup.PopupDataProvider", false, classLoader);
-            Method countForItem = providerClass.getDeclaredMethod(
-                    "getShortcutCountForItem", itemInfoClass);
-            Method countForContext = providerClass.getDeclaredMethod(
-                    "getShortcutCountForItem", Context.class, itemInfoClass);
-            hook(countForItem).intercept(chain -> hideDeepShortcuts()
-                    ? 0 : chain.proceed());
-            hook(countForContext).intercept(chain -> hideDeepShortcuts()
-                    ? 0 : chain.proceed());
+            try {
+                Method countForItem = providerClass.getDeclaredMethod(
+                        "getShortcutCountForItem", itemInfoClass);
+                hook(countForItem).intercept(chain -> hideDeepShortcuts()
+                        ? 0 : chain.proceed());
+            } catch (Throwable error) {
+                log(Log.WARN, TAG,
+                        "Deep-shortcut item-count hook unavailable", error);
+            }
+            try {
+                Method countForContext = providerClass.getDeclaredMethod(
+                        "getShortcutCountForItem", Context.class, itemInfoClass);
+                hook(countForContext).intercept(chain -> hideDeepShortcuts()
+                        ? 0 : chain.proceed());
+            } catch (Throwable error) {
+                log(Log.WARN, TAG,
+                        "Deep-shortcut context-count hook unavailable", error);
+            }
+        } catch (Throwable error) {
+            log(Log.WARN, TAG, "Deep-shortcut provider unavailable", error);
+        }
 
+        try {
             Class<?> populatorClass = Class.forName(
                     "com.android.launcher3.popup.PopupPopulator", false, classLoader);
             Method shortcutList = populatorClass.getDeclaredMethod(
@@ -322,7 +374,7 @@ public final class LauncherSloganModule extends XposedModule {
             hook(shortcutList).intercept(chain -> hideDeepShortcuts()
                     ? Collections.emptyList() : chain.proceed());
         } catch (Throwable error) {
-            log(Log.WARN, TAG, "Deep-shortcut visibility hooks unavailable", error);
+            log(Log.WARN, TAG, "Deep-shortcut list hook unavailable", error);
         }
     }
 
@@ -451,6 +503,7 @@ public final class LauncherSloganModule extends XposedModule {
         View container = (View) value;
         if (!translucent) {
             restorePanelBackground(container);
+            clearPanelBackgroundState(container);
             return;
         }
         if (!ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(container)) {
@@ -482,6 +535,63 @@ public final class LauncherSloganModule extends XposedModule {
             container.setOutlineProvider(ORIGINAL_CONTAINER_OUTLINES.get(container));
         }
         if (container instanceof ViewGroup) restoreShortcutRows((ViewGroup) container);
+    }
+
+    /**
+     * Drops all references captured while one popup was materialized. Drawable callbacks and
+     * outline providers can point back to their View, so relying on WeakHashMap keys alone does
+     * not make these entries collectible. The close animation is the popup lifecycle boundary.
+     */
+    private static void clearPanelBackgroundState(View view) {
+        ORIGINAL_CONTAINER_BACKGROUNDS.remove(view);
+        ORIGINAL_CONTAINER_ELEVATIONS.remove(view);
+        ORIGINAL_CONTAINER_CLIP.remove(view);
+        ORIGINAL_CONTAINER_OUTLINES.remove(view);
+        ORIGINAL_ROW_BACKGROUNDS.remove(view);
+        if (!(view instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            clearPanelBackgroundState(group.getChildAt(index));
+        }
+    }
+
+    private static void schedulePopupMaterialCleanup(Object popup, Object animationArg) {
+        if (!(animationArg instanceof AnimatorSet)) {
+            return;
+        }
+        AnimatorSet closeAnimation = (AnimatorSet) animationArg;
+        closeAnimation.addListener(new Animator.AnimatorListener() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                clearPopupMaterialState(popup);
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                // Animator guarantees onAnimationEnd after cancellation. Keep the material
+                // intact during cancellation itself in case the popup is reopened immediately.
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animation) {
+            }
+        });
+    }
+
+    private static void clearPopupMaterialState(Object popup) {
+        Object value = readFieldUnchecked(popup, "mAllPopupShortcutContainer");
+        if (value instanceof View) {
+            View container = (View) value;
+            restorePanelBackground(container);
+            clearPanelBackgroundState(container);
+        }
+        restorePopupBackdrop(popup);
+        ORIGINAL_BLUR_ALPHA.remove(popup);
+        ORIGINAL_ADD_BLUR.remove(popup);
     }
 
     private static void restoreShortcutRows(ViewGroup group) {
@@ -641,16 +751,14 @@ public final class LauncherSloganModule extends XposedModule {
         Object value = readFieldUnchecked(popup, "mAllPopupShortcutContainer");
         if (!(value instanceof ViewGroup)) return;
         ViewGroup container = (ViewGroup) value;
-        Object shortcutsValue = readFieldUnchecked(popup, "mPopupShortcutContainer");
-        boolean hasSlogan = shortcutsValue instanceof ViewGroup
-                && ((ViewGroup) shortcutsValue).findViewWithTag(ROW_TAG) != null;
         int width = dp(context, IPHONE_MENU_WIDTH_DP);
-        // A configured slogan owns the panel's top optical inset so its ripple reaches
-        // the rounded panel edge. Menus without a slogan retain the native inset.
+        // The first interactive row must always own the rounded top edge. A slogan does so
+        // when configured; otherwise the first native system row does. Leaving a container
+        // inset in the latter case visibly cuts off its pressed feedback.
         int outerInset = dp(context, IPHONE_OUTER_VERTICAL_INSET_DP);
         // The last native row absorbs the lower optical inset so its pressed feedback can
         // reach the panel edge. Keep the total panel height unchanged.
-        container.setPadding(container.getPaddingLeft(), hasSlogan ? 0 : outerInset,
+        container.setPadding(container.getPaddingLeft(), 0,
                 container.getPaddingRight(), 0);
         setWidth(container, width);
         resizePopupTree(container, context, width, true);
@@ -1123,8 +1231,16 @@ public final class LauncherSloganModule extends XposedModule {
             return;
         }
         Object value = readFieldUnchecked(popup, "mPopupShortcutContainer");
-        if (value instanceof ViewGroup) {
-            restoreNormalNativeDividers((ViewGroup) value, context);
+        if (!(value instanceof ViewGroup)) {
+            return;
+        }
+        ViewGroup shortcuts = (ViewGroup) value;
+        if (shortcuts.findViewWithTag(ROW_TAG) != null) {
+            restoreNormalNativeDividers(shortcuts, context);
+        } else {
+            // This is the native first item, not a slogan boundary. Keep its own divider
+            // suppressed so neither a line nor its press-mask reserve remains above it.
+            suppressNormalFirstNativeDivider(shortcuts, context);
         }
     }
 
@@ -1135,6 +1251,20 @@ public final class LauncherSloganModule extends XposedModule {
         View firstNativeRow = findFirstNativeRow(shortcuts, context);
         if (firstNativeRow != null) {
             ensureNormalBoundaryDivider(firstNativeRow, shortcuts, context);
+        }
+    }
+
+    private static void suppressNormalFirstNativeDivider(ViewGroup shortcuts, Context context) {
+        View firstNativeRow = findFirstNativeRow(shortcuts, context);
+        if (firstNativeRow == null) {
+            return;
+        }
+        setDividerVisible(firstNativeRow, false);
+        int dividerId = context.getResources().getIdentifier("divider", "id", LAUNCHER_PACKAGE);
+        View divider = dividerId == 0 ? null : firstNativeRow.findViewById(dividerId);
+        if (divider != null) {
+            divider.setVisibility(View.GONE);
+            divider.setAlpha(0f);
         }
     }
 

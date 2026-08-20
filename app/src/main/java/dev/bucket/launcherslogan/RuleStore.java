@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Versioned, cross-UID rule storage readable by the Launcher process. */
@@ -96,6 +98,7 @@ public final class RuleStore {
             JSONArray array = payload.optJSONArray("rules");
             if (array == null) return Collections.emptyList();
             ArrayList<SloganRule> rules = new ArrayList<>();
+            Set<String> packageNames = new HashSet<>();
             for (int i = 0; i < array.length() && rules.size() < MAX_RULES; i++) {
                 JSONObject item = array.optJSONObject(i);
                 if (item == null) continue;
@@ -104,7 +107,11 @@ public final class RuleStore {
                 String subtitle = cleanSubtitle(item.optString("subtitle", ""));
                 String toastMessage = cleanToastMessage(item.optString("toastMessage", ""));
                 if (isValid(packageName, title, subtitle, toastMessage)) {
-                    rules.add(new SloganRule(packageName, title, subtitle, toastMessage));
+                    // Keep the first valid entry for each package. Compose uses packageName as
+                    // the item key, so duplicate package names must not escape this boundary.
+                    if (packageNames.add(packageName)) {
+                        rules.add(new SloganRule(packageName, title, subtitle, toastMessage));
+                    }
                 }
             }
             rules.sort(Comparator.comparing(SloganRule::getPackageName));

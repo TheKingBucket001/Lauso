@@ -9,7 +9,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -75,7 +75,7 @@ jobs:
             exit 1
           fi
           "$build_tools/aapt" dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
-          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.6'"
+          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.6.1'"
 
       - name: Rename release APK
         if: startsWith(github.ref, 'refs/tags/v')
@@ -89,16 +89,64 @@ jobs:
           path: app/build/outputs/apk/release/LauSo-${{ github.ref_name }}.apk
           if-no-files-found: error
 
+  publish:
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: LauSo-${{ github.ref_name }}
+          path: release
+
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: LauSo ${{ github.ref_name }}
           body: |
-            ## 改进
+            ## v0.6.1
 
-            - 开屏环境检测改为本次启动的一次性 Launcher 回执，避免沿用旧心跳状态。
-            - 移除开屏 ContentProvider 轮询和临时状态持久化，缩短正常环境检测等待。
-            - 保留菜单视觉适配、按压反馈恢复和标语点击关闭链路的稳定性修复。
-            - 完善关于页面、Root/LSPosed 门禁和项目发布信息。
-          files: app/build/outputs/apk/release/LauSo-${{ github.ref_name }}.apk
+            v0.6 已将开屏环境检测迁移到本次启动的一次性 Launcher 回执。本版本继续完善该链路及菜单稳定性。
+
+            - 规则存储按应用包名去重，避免重复规则导致管理页崩溃。
+            - 门禁改用单调时钟和回执重试；保存、刷新与设置写入均随 Activity 生命周期取消，避免旧页面回调。
+            - 可选 Launcher Hook 独立降级，popup 关闭后清理材质缓存，减少兼容性失败和 View 滞留风险。
+            - 修正无标语菜单的 divider 与按压反馈边界，并更新展示素材。
+          files: release/LauSo-${{ github.ref_name }}.apk
+
+  sync-lsposed-repository:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Configure LSPosed repository key
+        env:
+          LSPOSED_SYNC_SSH_KEY: ${{ secrets.LSPOSED_SYNC_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${LSPOSED_SYNC_SSH_KEY:?LSPOSED_SYNC_SSH_KEY is required}"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$LSPOSED_SYNC_SSH_KEY" > ~/.ssh/lsposed-sync
+          chmod 600 ~/.ssh/lsposed-sync
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+          printf 'Host github.com\n  IdentityFile ~/.ssh/lsposed-sync\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+
+      - name: Synchronize LSPosed module repository
+        env:
+          LSPOSED_REPOSITORY_SSH_URL: git@github.com:Xposed-Modules-Repo/dev.bucket.launcherslogan.git
+          LSPOSED_SOURCE_URL: https://github.com/TheKingBucket001/Lauso
+          LSPOSED_DISPLAY_TITLE: LauSo-为 ColorOS Launcher 图标长按菜单添加自定义标语
+        run: node scripts/sync-lsposed-repository.mjs

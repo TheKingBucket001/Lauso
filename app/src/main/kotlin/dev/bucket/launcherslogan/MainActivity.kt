@@ -3,10 +3,12 @@ package dev.bucket.launcherslogan
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -70,7 +72,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
-import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,36 +204,31 @@ private fun LauncherSloganApp(activity: MainActivity) {
 
     LaunchedEffect(gateRefreshSignal) {
         gateState = GateState()
-        Thread {
-            val rootResult = AtomicReference<RootAccess.Result?>()
-            val rootDeadline = System.currentTimeMillis() + 4_250L
-            val rootThread = Thread { rootResult.set(RootAccess.check()) }
-            rootThread.start()
-            val hookReady = waitForLauncherVerification(activity)
-            try {
-                rootThread.join((rootDeadline - System.currentTimeMillis()).coerceAtLeast(0L))
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
-            val root = rootResult.get()
-            activity.runOnUiThread {
-                gateState = GateState(
-                    checking = false,
-                    hookReady = hookReady,
-                    rootReady = root?.granted == true,
-                    hookMessage = if (hookReady) {
-                        "Launcher 已对本次检查回执"
-                    } else {
-                        "未收到 Launcher 当前回执。请确认已在 LSPosed 启用 LauSo 的 Launcher 作用域，并重启 Launcher。"
-                    },
-                    rootMessage = when {
-                        root == null -> "Root 授权检测超时，请重新检查"
-                        root.granted -> "已获得 uid=0"
-                        else -> root.message.ifBlank { "Root 授权未通过" }
-                    },
-                )
-            }
-        }.start()
+        val rootDeadline = SystemClock.elapsedRealtime() + 4_250L
+        val rootResult = async(Dispatchers.IO) { RootAccess.check() }
+        val hookReady = withContext(Dispatchers.IO) {
+            waitForLauncherVerification(activity)
+        }
+        val root = withTimeoutOrNull(
+            (rootDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
+        ) {
+            rootResult.await()
+        }
+        gateState = GateState(
+            checking = false,
+            hookReady = hookReady,
+            rootReady = root?.granted == true,
+            hookMessage = if (hookReady) {
+                "Launcher 已对本次检查回执"
+            } else {
+                "未收到 Launcher 当前回执。请确认已在 LSPosed 启用 LauSo 的 Launcher 作用域，并重启 Launcher。"
+            },
+            rootMessage = when {
+                root == null -> "Root 授权检测超时，请重新检查"
+                root.granted -> "已获得 uid=0"
+                else -> root.message.ifBlank { "Root 授权未通过" }
+            },
+        )
     }
 
     fun openEditor(rule: SloganRule?) {
@@ -256,39 +257,35 @@ private fun LauncherSloganApp(activity: MainActivity) {
             .toMutableList()
             .apply { add(SloganRule(cleanPackage, cleanTitle, cleanSubtitle, cleanToastMessage)) }
             .sortedBy { it.packageName }
-        Thread {
-            val result = RootAccess.saveRules(next)
-            activity.runOnUiThread {
-                saving = false
-                if (result.granted) {
-                    rules = next
-                    editing = null
-                    page = Page.HOME
-                    Toast.makeText(activity, "已保存，点击刷新应用到桌面", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(activity, result.message.ifBlank { "保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-                }
+        activity.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { RootAccess.saveRules(next) }
+            saving = false
+            if (result.granted) {
+                rules = next
+                editing = null
+                page = Page.HOME
+                Toast.makeText(activity, "已保存，点击刷新应用到桌面", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(activity, result.message.ifBlank { "保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
             }
-        }.start()
+        }
     }
 
     fun deleteRule(rule: SloganRule) {
         saving = true
         val next = rules.filterNot { it.packageName == rule.packageName }
-        Thread {
-            val result = RootAccess.saveRules(next)
-            activity.runOnUiThread {
-                saving = false
-                if (result.granted) {
-                    rules = next
-                    editing = null
-                    page = Page.HOME
-                    Toast.makeText(activity, "已删除", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(activity, result.message.ifBlank { "删除失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-                }
+        activity.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { RootAccess.saveRules(next) }
+            saving = false
+            if (result.granted) {
+                rules = next
+                editing = null
+                page = Page.HOME
+                Toast.makeText(activity, "已删除", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(activity, result.message.ifBlank { "删除失败，请确认 Root" }, Toast.LENGTH_LONG).show()
             }
-        }.start()
+        }
     }
 
     fun savePopupSetting(kind: Int, enabled: Boolean) {
@@ -306,28 +303,28 @@ private fun LauncherSloganApp(activity: MainActivity) {
             else -> disableBackdropBlurEnabled = enabled
         }
         settingSaveInFlight = true
-        Thread {
-            val result = when (kind) {
-                0 -> RootAccess.saveMaterial(enabled)
-                1 -> RootAccess.saveCompact(enabled)
-                2 -> RootAccess.saveVisualComfort(enabled)
-                else -> RootAccess.saveDisableBackdrop(enabled)
-            }
-            activity.runOnUiThread {
-                settingSaveInFlight = false
-                if (result.granted) {
-                    Toast.makeText(activity, "菜单外观偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
-                } else {
-                    when (kind) {
-                        0 -> translucentPanelEnabled = previous
-                        1 -> compactMenuEnabled = previous
-                        2 -> visualComfortEnabled = previous
-                        else -> disableBackdropBlurEnabled = previous
-                    }
-                    Toast.makeText(activity, result.message.ifBlank { "菜单外观保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
+        activity.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                when (kind) {
+                    0 -> RootAccess.saveMaterial(enabled)
+                    1 -> RootAccess.saveCompact(enabled)
+                    2 -> RootAccess.saveVisualComfort(enabled)
+                    else -> RootAccess.saveDisableBackdrop(enabled)
                 }
             }
-        }.start()
+            settingSaveInFlight = false
+            if (result.granted) {
+                Toast.makeText(activity, "菜单外观偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
+            } else {
+                when (kind) {
+                    0 -> translucentPanelEnabled = previous
+                    1 -> compactMenuEnabled = previous
+                    2 -> visualComfortEnabled = previous
+                    else -> disableBackdropBlurEnabled = previous
+                }
+                Toast.makeText(activity, result.message.ifBlank { "菜单外观保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun saveMenuContent(option: String, enabled: Boolean) {
@@ -335,18 +332,16 @@ private fun LauncherSloganApp(activity: MainActivity) {
         val previous = menuContentEnabled[option] == true
         menuContentEnabled = menuContentEnabled + (option to enabled)
         settingSaveInFlight = true
-        Thread {
-            val result = RootAccess.saveMenuContent(option, enabled)
-            activity.runOnUiThread {
-                settingSaveInFlight = false
-                if (result.granted) {
-                    Toast.makeText(activity, "菜单内容偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
-                } else {
-                    menuContentEnabled = menuContentEnabled + (option to previous)
-                    Toast.makeText(activity, result.message.ifBlank { "菜单内容保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-                }
+        activity.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { RootAccess.saveMenuContent(option, enabled) }
+            settingSaveInFlight = false
+            if (result.granted) {
+                Toast.makeText(activity, "菜单内容偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
+            } else {
+                menuContentEnabled = menuContentEnabled + (option to previous)
+                Toast.makeText(activity, result.message.ifBlank { "菜单内容保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
             }
-        }.start()
+        }
     }
 
     BackHandler(enabled = page != Page.HOME) {
@@ -380,20 +375,18 @@ private fun LauncherSloganApp(activity: MainActivity) {
                 HomeScreen(
                     rules = rules,
                     onRefresh = {
-                        Thread {
-                            val result = RootAccess.refreshLauncher()
-                            activity.runOnUiThread {
-                                if (result.granted) {
-                                    Toast.makeText(activity, "桌面正在热刷新", Toast.LENGTH_SHORT).show()
-                                    activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
-                                        addCategory(Intent.CATEGORY_HOME)
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    })
-                                } else {
-                                    Toast.makeText(activity, result.message.ifBlank { "桌面刷新失败" }, Toast.LENGTH_LONG).show()
-                                }
+                        activity.lifecycleScope.launch {
+                            val result = withContext(Dispatchers.IO) { RootAccess.refreshLauncher() }
+                            if (result.granted) {
+                                Toast.makeText(activity, "桌面正在热刷新", Toast.LENGTH_SHORT).show()
+                                activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
+                                    addCategory(Intent.CATEGORY_HOME)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } else {
+                                Toast.makeText(activity, result.message.ifBlank { "桌面刷新失败" }, Toast.LENGTH_LONG).show()
                             }
-                        }.start()
+                        }
                     },
                     onAbout = { page = Page.ABOUT },
                     onAdd = { openEditor(null) },
@@ -627,15 +620,6 @@ private fun SettingsScreen(
                 )
             }
         }
-        item {
-            Text(
-                "所有选项默认关闭；每次重新打开长按菜单后生效。",
-                modifier = Modifier.padding(start = 24.dp, top = 10.dp, end = 24.dp),
-                style = MiuixTheme.textStyles.body2,
-                color = AppPalette.Muted,
-                lineHeight = 20.sp,
-            )
-        }
         item { SectionTitle("菜单内容") }
         item {
             Card(
@@ -836,20 +820,28 @@ private fun EditScreen(
     }
 }
 
+private const val LAUNCHER_VERIFY_RETRY_COUNT = 4
+private const val LAUNCHER_VERIFY_TOTAL_TIMEOUT_MS = 900L
+private const val LAUNCHER_VERIFY_ATTEMPT_TIMEOUT_MS = 225L
+
 private fun waitForLauncherVerification(activity: MainActivity): Boolean {
     val requestId = ModuleStatusProvider.beginLauncherVerification(activity) ?: return false
+    val verificationIntent = Intent(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER)
+        .setPackage(ModuleStatusProvider.LAUNCHER_PACKAGE)
+        .putExtra(ModuleStatusProvider.EXTRA_REQUEST_ID, requestId)
+    val deadline = SystemClock.elapsedRealtime() + LAUNCHER_VERIFY_TOTAL_TIMEOUT_MS
     try {
-        activity.sendBroadcast(
-            Intent(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER)
-                .setPackage(ModuleStatusProvider.LAUNCHER_PACKAGE)
-                .putExtra(ModuleStatusProvider.EXTRA_REQUEST_ID, requestId),
-        )
+        repeat(LAUNCHER_VERIFY_RETRY_COUNT) {
+            val remaining = deadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) return false
+            activity.sendBroadcast(verificationIntent)
+            val waitMs = minOf(remaining, LAUNCHER_VERIFY_ATTEMPT_TIMEOUT_MS)
+            if (ModuleStatusProvider.awaitLauncherVerification(requestId, waitMs)) return true
+        }
     } catch (_: Throwable) {
         return false
     }
-    // The provider owns a one-shot in-memory latch for this exact nonce. Waiting here avoids
-    // persistent preference writes and the old fixed 150ms ContentProvider polling interval.
-    return ModuleStatusProvider.awaitLauncherVerification(requestId, 500L)
+    return false
 }
 
 @Composable
