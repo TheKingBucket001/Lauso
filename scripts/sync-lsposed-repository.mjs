@@ -87,7 +87,11 @@ try {
             // The target has no release tag yet.
         }
         if (!tagExists) {
-            const tagArgs = ['-c', `tag.gpgSign=${signingKey ? 'true' : 'false'}`];
+            const tagArgs = [
+                '-c', 'user.name=TheKingBucket001',
+                '-c', 'user.email=186387631+TheKingBucket001@users.noreply.github.com',
+                '-c', `tag.gpgSign=${signingKey ? 'true' : 'false'}`,
+            ];
             if (signingKey) {
                 tagArgs.push('-c', 'gpg.format=ssh', '-c', `user.signingkey=${signingKey}`,
                     '-c', `gpg.ssh.program=${signingProgram}`);
