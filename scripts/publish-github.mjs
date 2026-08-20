@@ -6,6 +6,8 @@ import { execFileSync } from 'node:child_process';
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const owner = process.env.GITHUB_OWNER || 'TheKingBucket001';
 const repo = process.env.GITHUB_REPOSITORY_NAME || 'Lauso';
+const releaseVersion = process.env.RELEASE_VERSION || '0.6';
+const releaseTag = `v${releaseVersion}`;
 const fullRepo = `${owner}/${repo}`;
 let token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 if (!token) {
@@ -93,7 +95,7 @@ function ensureGitPush(repository) {
   git(['config', 'commit.gpgsign', 'true']);
   git(['add', '-A']);
   try { git(['diff', '--cached', '--quiet']); }
-  catch { git(['commit', '-m', '发布 LauSo v0.5']); }
+  catch { git(['commit', '-m', `发布 LauSo ${releaseTag}`]); }
   git(['push', '-u', 'origin', 'main']);
 }
 
@@ -107,13 +109,13 @@ function setSecret(name, value) {
 
 function publishReleaseTag() {
   try {
-    execFileSync('git', ['rev-parse', '--verify', 'refs/tags/v0.5'], { cwd: projectRoot, stdio: 'ignore' });
-    throw new Error('本地 v0.5 标签已经存在；为避免覆盖发行历史，脚本停止。');
+    execFileSync('git', ['rev-parse', '--verify', `refs/tags/${releaseTag}`], { cwd: projectRoot, stdio: 'ignore' });
+    throw new Error(`本地 ${releaseTag} 标签已经存在；为避免覆盖发行历史，脚本停止。`);
   } catch (error) {
-    if (error.message.includes('本地 v0.5')) throw error;
+    if (error.message.includes(`本地 ${releaseTag}`)) throw error;
   }
-  git(['tag', '-s', 'v0.5', '-m', 'LauSo v0.5']);
-  git(['push', 'origin', 'v0.5']);
+  git(['tag', '-s', releaseTag, '-m', `LauSo ${releaseTag}`]);
+  git(['push', 'origin', releaseTag]);
 }
 
 const repository = await ensureRepository();

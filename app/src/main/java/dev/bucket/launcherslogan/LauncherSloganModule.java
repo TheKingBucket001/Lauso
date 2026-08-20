@@ -1,6 +1,10 @@
 package dev.bucket.launcherslogan;
 
+import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Rect;
@@ -24,6 +28,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.graphics.drawable.RippleDrawable;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -108,6 +115,8 @@ public final class LauncherSloganModule extends XposedModule {
     private static final int IPHONE_PANEL_RADIUS_DP = 20;
 
     private final AtomicBoolean hookInstalled = new AtomicBoolean(false);
+    private final AtomicBoolean verificationReceiverInstalled = new AtomicBoolean(false);
+    private final AtomicBoolean verificationReceiverRegistrationScheduled = new AtomicBoolean(false);
 
     @Override
     public void onPackageReady(PackageReadyParam param) {
@@ -157,7 +166,7 @@ public final class LauncherSloganModule extends XposedModule {
 
         installOptionalPopupMaterialHooks(popupClass);
         installMenuContentHooks(param.getClassLoader());
-        reportLauncherLoaded(param.getClassLoader());
+        installLauncherVerificationReceiver(param.getClassLoader());
         log(Log.INFO, TAG, "Hook installed for " + POPUP_CLASS + ".reorderAndShow(int)");
     }
 
@@ -355,7 +364,6 @@ public final class LauncherSloganModule extends XposedModule {
         if (rule == null) {
             return;
         }
-        ModuleStatusProvider.reportLauncherLoaded(context);
         int layoutId = context.getResources().getIdentifier(
                 "oplus_deep_shortcut", "layout", LAUNCHER_PACKAGE);
         int textId = context.getResources().getIdentifier(
@@ -1613,16 +1621,75 @@ public final class LauncherSloganModule extends XposedModule {
         return height > 0 && height <= dp(context, 12);
     }
 
-    private void reportLauncherLoaded(ClassLoader classLoader) {
+    private void installLauncherVerificationReceiver(ClassLoader classLoader) {
+        if (verificationReceiverInstalled.get()
+                || !verificationReceiverRegistrationScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+            private int attemptsRemaining = 20;
+
+            @Override
+            public void run() {
+                if (verificationReceiverInstalled.get()) {
+                    verificationReceiverRegistrationScheduled.set(false);
+                    return;
+                }
+                if (tryInstallLauncherVerificationReceiver(classLoader)) {
+                    verificationReceiverRegistrationScheduled.set(false);
+                    return;
+                }
+                attemptsRemaining--;
+                if (attemptsRemaining > 0) {
+                    handler.postDelayed(this, 250L);
+                } else {
+                    verificationReceiverRegistrationScheduled.set(false);
+                    log(Log.WARN, TAG, "Launcher verification receiver was unavailable after startup");
+                }
+            }
+        });
+    }
+
+    /**
+     * LSPosed invokes onPackageReady before Launcher has necessarily attached its Application.
+     * Registration must therefore retry briefly on Launcher main thread instead of treating that
+     * first null currentApplication result as a permanent verification failure.
+     */
+    @SuppressLint("UnspecifiedRegisterReceiverFlag") // API 26-32 has no receiver flag overload.
+    private boolean tryInstallLauncherVerificationReceiver(ClassLoader classLoader) {
         try {
             Class<?> activityThread = Class.forName("android.app.ActivityThread", false, classLoader);
             Method currentApplication = activityThread.getDeclaredMethod("currentApplication");
             Object application = currentApplication.invoke(null);
-            if (application instanceof Context) {
-                ModuleStatusProvider.reportLauncherLoaded((Context) application);
+            if (!(application instanceof Context)) return false;
+            Context context = ((Context) application).getApplicationContext();
+            BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context receiverContext, Intent intent) {
+                    if (intent == null || !ModuleStatusProvider.ACTION_VERIFY_LAUNCHER.equals(
+                            intent.getAction())) {
+                        return;
+                    }
+                    ModuleStatusProvider.confirmLauncherVerification(receiverContext,
+                            intent.getStringExtra(ModuleStatusProvider.EXTRA_REQUEST_ID));
+                }
+            };
+            IntentFilter filter = new IntentFilter(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver, filter,
+                        ModuleStatusProvider.PERMISSION_VERIFY_LAUNCHER, null,
+                        Context.RECEIVER_EXPORTED);
+            } else {
+                context.registerReceiver(receiver, filter,
+                        ModuleStatusProvider.PERMISSION_VERIFY_LAUNCHER, null);
             }
+            verificationReceiverInstalled.set(true);
+            log(Log.INFO, TAG, "Launcher verification receiver installed");
+            return true;
         } catch (Throwable error) {
-            log(Log.DEBUG, TAG, "Launcher context not ready for status report", error);
+            log(Log.DEBUG, TAG, "Launcher verification receiver unavailable", error);
+            return false;
         }
     }
 

@@ -2,60 +2,97 @@ package dev.bucket.launcherslogan;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Process;
-import android.provider.Settings;
+import android.os.SystemClock;
 
-/** Reports and exposes proof that the Launcher process actually loaded this module. */
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Coordinates a short-lived, caller-verified handshake between the management app and Launcher.
+ * A historical Hook heartbeat is deliberately insufficient: every app launch needs a new reply.
+ */
 public final class ModuleStatusProvider extends ContentProvider {
     public static final String AUTHORITY = "dev.bucket.launcherslogan.status";
+    public static final String LAUNCHER_PACKAGE = "com.android.launcher";
+    public static final String ACTION_VERIFY_LAUNCHER =
+            "dev.bucket.launcherslogan.action.VERIFY_LAUNCHER";
+    public static final String EXTRA_REQUEST_ID = "request_id";
+    public static final String PERMISSION_VERIFY_LAUNCHER =
+            "dev.bucket.launcherslogan.permission.VERIFY_LAUNCHER";
+
     private static final String PATH = "status";
-    private static final String METHOD_REPORT = "report_launcher_loaded";
-    private static final String EXTRA_PACKAGE = "reporting_package";
-    private static final String PREFS = "module_status";
-    private static final String KEY_BOOT = "hook_boot_count";
-    private static final String KEY_LOADED = "hook_loaded_at";
-    private static final String KEY_VERSION = "hook_module_version";
-    private static final String LAUNCHER = "com.android.launcher";
+    private static final String METHOD_BEGIN = "begin_launcher_verification";
+    private static final String METHOD_CONFIRM = "confirm_launcher_verification";
+    private static final String EXTRA_ACCEPTED = "accepted";
+    private static final long REQUEST_TTL_MS = 8_000L;
+    private static final Object VERIFICATION_LOCK = new Object();
+    private static PendingVerification pendingVerification;
+
+    private static final class PendingVerification {
+        final String requestId;
+        final long requestedAt;
+        final CountDownLatch confirmed = new CountDownLatch(1);
+        boolean accepted;
+
+        PendingVerification(String requestId, long requestedAt) {
+            this.requestId = requestId;
+            this.requestedAt = requestedAt;
+        }
+    }
 
     public static Uri uri() {
         return Uri.parse("content://" + AUTHORITY + "/" + PATH);
     }
 
-    public static void reportLauncherLoaded(android.content.Context context) {
+    /** Starts a new verification round and invalidates every older Launcher response. */
+    public static String beginLauncherVerification(Context context) {
         try {
-            Bundle extras = new Bundle();
-            extras.putString(EXTRA_PACKAGE, LAUNCHER);
-            context.getContentResolver().call(uri(), METHOD_REPORT, null, extras);
+            Bundle result = context.getContentResolver().call(uri(), METHOD_BEGIN, null, null);
+            if (result == null || !result.getBoolean(EXTRA_ACCEPTED, false)) return null;
+            return result.getString(EXTRA_REQUEST_ID);
         } catch (Throwable ignored) {
-            // The Provider may not be available during the earliest process startup.
+            return null;
         }
     }
 
-    public static HookStatus read(android.content.Context context) {
-        int boot = getBootCount(context);
-        android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS, 0);
-        int reportedBoot = prefs.getInt(KEY_BOOT, -1);
-        long loadedAt = prefs.getLong(KEY_LOADED, 0L);
-        int version = prefs.getInt(KEY_VERSION, -1);
-        // A Launcher process can retain the previous module heartbeat while an APK
-        // update is waiting for that process to be recycled. The gate is meant to
-        // prove that LSPosed loaded LauSo in this boot, not to deadlock on an
-        // otherwise harmless version transition; keep the version for diagnostics.
-        boolean ready = boot >= 0
-                && reportedBoot == boot
-                && loadedAt > 0L;
-        return new HookStatus(ready, loadedAt, reportedBoot, version);
+    /** Called only from the dynamically registered receiver in the injected Launcher process. */
+    public static boolean confirmLauncherVerification(Context context, String requestId) {
+        if (requestId == null || requestId.isEmpty()) return false;
+        try {
+            Bundle extras = new Bundle();
+            extras.putString(EXTRA_REQUEST_ID, requestId);
+            Bundle result = context.getContentResolver().call(uri(), METHOD_CONFIRM, null, extras);
+            return result != null && result.getBoolean(EXTRA_ACCEPTED, false);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
-    private static int getBootCount(android.content.Context context) {
+    /** Waits for this exact request without polling or persisting transient state. */
+    public static boolean awaitLauncherVerification(String requestId, long timeoutMs) {
+        if (requestId == null || requestId.isEmpty()) return false;
+        PendingVerification pending;
+        synchronized (VERIFICATION_LOCK) {
+            pending = pendingVerification;
+            if (pending == null || !requestId.equals(pending.requestId)) return false;
+        }
         try {
-            return Settings.Global.getInt(context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
-        } catch (Throwable ignored) {
-            return -1;
+            pending.confirmed.await(Math.max(0L, timeoutMs), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        synchronized (VERIFICATION_LOCK) {
+            return pendingVerification == pending
+                    && pending.accepted
+                    && isFresh(pending, SystemClock.elapsedRealtime());
         }
     }
 
@@ -66,29 +103,68 @@ public final class ModuleStatusProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
-        if (!METHOD_REPORT.equals(method) || extras == null || getContext() == null
-                || !LAUNCHER.equals(extras.getString(EXTRA_PACKAGE))
-                || !isAllowedCaller()) {
-            return Bundle.EMPTY;
+        Context context = getContext();
+        if (context == null) return Bundle.EMPTY;
+        if (METHOD_BEGIN.equals(method)) {
+            return isOwnAppCaller() ? begin() : Bundle.EMPTY;
         }
-        int boot = getBootCount(getContext());
-        boolean saved = boot >= 0 && getContext().getSharedPreferences(PREFS, 0).edit()
-                .putInt(KEY_BOOT, boot)
-                .putLong(KEY_LOADED, System.currentTimeMillis())
-                .putInt(KEY_VERSION, BuildConfig.VERSION_CODE)
-                .commit();
+        if (METHOD_CONFIRM.equals(method)) {
+            return isLauncherCaller()
+                    ? confirm(extras == null ? null : extras.getString(EXTRA_REQUEST_ID))
+                    : Bundle.EMPTY;
+        }
+        return Bundle.EMPTY;
+    }
+
+    private Bundle begin() {
+        String requestId = UUID.randomUUID().toString();
+        PendingVerification next = new PendingVerification(requestId, SystemClock.elapsedRealtime());
+        synchronized (VERIFICATION_LOCK) {
+            pendingVerification = next;
+        }
         Bundle result = new Bundle();
-        result.putBoolean("accepted", saved);
+        result.putBoolean(EXTRA_ACCEPTED, true);
+        result.putString(EXTRA_REQUEST_ID, requestId);
         return result;
     }
 
-    private boolean isAllowedCaller() {
-        int uid = Binder.getCallingUid();
-        if (uid == Process.myUid()) return true;
-        String[] packages = getContext().getPackageManager().getPackagesForUid(uid);
+    private Bundle confirm(String requestId) {
+        boolean accepted = false;
+        synchronized (VERIFICATION_LOCK) {
+            PendingVerification pending = pendingVerification;
+            if (pending != null
+                    && requestId != null
+                    && requestId.equals(pending.requestId)
+                    && isFresh(pending, SystemClock.elapsedRealtime())) {
+                pending.accepted = true;
+                pending.confirmed.countDown();
+                accepted = true;
+            }
+        }
+        Bundle result = new Bundle();
+        result.putBoolean(EXTRA_ACCEPTED, accepted);
+        return result;
+    }
+
+    private static boolean isFresh(PendingVerification pending, long now) {
+        if (pending == null) return false;
+        long elapsed = now - pending.requestedAt;
+        return pending.requestedAt >= 0L
+                && elapsed >= 0L
+                && elapsed <= REQUEST_TTL_MS;
+    }
+
+    private boolean isOwnAppCaller() {
+        return Binder.getCallingUid() == Process.myUid();
+    }
+
+    private boolean isLauncherCaller() {
+        Context context = getContext();
+        if (context == null) return false;
+        String[] packages = context.getPackageManager().getPackagesForUid(Binder.getCallingUid());
         if (packages == null) return false;
         for (String packageName : packages) {
-            if (LAUNCHER.equals(packageName)) return true;
+            if (LAUNCHER_PACKAGE.equals(packageName)) return true;
         }
         return false;
     }
@@ -98,19 +174,6 @@ public final class ModuleStatusProvider extends ContentProvider {
     @Override public String getType(Uri uri) { return null; }
     @Override public Uri insert(Uri uri, ContentValues values) { return null; }
     @Override public int delete(Uri uri, String selection, String[] selectionArgs) { return 0; }
-    @Override public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) { return 0; }
-
-    public static final class HookStatus {
-        public final boolean loadedForCurrentBoot;
-        public final long loadedAt;
-        public final int reportedBoot;
-        public final int moduleVersion;
-
-        HookStatus(boolean loadedForCurrentBoot, long loadedAt, int reportedBoot, int moduleVersion) {
-            this.loadedForCurrentBoot = loadedForCurrentBoot;
-            this.loadedAt = loadedAt;
-            this.reportedBoot = reportedBoot;
-            this.moduleVersion = moduleVersion;
-        }
-    }
+    @Override public int update(Uri uri, ContentValues values, String selection,
+                                String[] selectionArgs) { return 0; }
 }

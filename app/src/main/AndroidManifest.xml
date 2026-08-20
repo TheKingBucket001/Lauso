@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <permission
+        android:name="dev.bucket.launcherslogan.permission.VERIFY_LAUNCHER"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="dev.bucket.launcherslogan.permission.VERIFY_LAUNCHER" />
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

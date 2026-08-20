@@ -70,6 +70,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
+import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,7 +96,8 @@ private data class GateState(
     val checking: Boolean = true,
     val hookReady: Boolean = false,
     val rootReady: Boolean = false,
-    val rootMessage: String = "等待 LSPosed 框架检测完成",
+    val hookMessage: String = "等待 Launcher 作用域检测完成",
+    val rootMessage: String = "等待 Root 授权检测完成",
 )
 
 private const val LAUSO_REPOSITORY_URL = "https://github.com/TheKingBucket001/Lauso"
@@ -195,16 +197,31 @@ private fun LauncherSloganApp(activity: MainActivity) {
     }
 
     LaunchedEffect(gateRefreshSignal) {
+        gateState = GateState()
         Thread {
-            val hook = waitForLauncherHook(activity)
-            val root = if (hook.loadedForCurrentBoot) RootAccess.check() else null
+            val rootResult = AtomicReference<RootAccess.Result?>()
+            val rootDeadline = System.currentTimeMillis() + 4_250L
+            val rootThread = Thread { rootResult.set(RootAccess.check()) }
+            rootThread.start()
+            val hookReady = waitForLauncherVerification(activity)
+            try {
+                rootThread.join((rootDeadline - System.currentTimeMillis()).coerceAtLeast(0L))
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            val root = rootResult.get()
             activity.runOnUiThread {
                 gateState = GateState(
                     checking = false,
-                    hookReady = hook.loadedForCurrentBoot,
+                    hookReady = hookReady,
                     rootReady = root?.granted == true,
+                    hookMessage = if (hookReady) {
+                        "Launcher 已对本次检查回执"
+                    } else {
+                        "未收到 Launcher 当前回执。请确认已在 LSPosed 启用 LauSo 的 Launcher 作用域，并重启 Launcher。"
+                    },
                     rootMessage = when {
-                        root == null -> "等待 LSPosed 在 Launcher 中加载模块后再验证 Root"
+                        root == null -> "Root 授权检测超时，请重新检查"
                         root.granted -> "已获得 uid=0"
                         else -> root.message.ifBlank { "Root 授权未通过" }
                     },
@@ -819,19 +836,20 @@ private fun EditScreen(
     }
 }
 
-private fun waitForLauncherHook(activity: MainActivity): ModuleStatusProvider.HookStatus {
-    val deadline = System.currentTimeMillis() + 2_500L
-    do {
-        val status = ModuleStatusProvider.read(activity)
-        if (status.loadedForCurrentBoot) return status
-        try {
-            Thread.sleep(150L)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            break
-        }
-    } while (System.currentTimeMillis() < deadline)
-    return ModuleStatusProvider.read(activity)
+private fun waitForLauncherVerification(activity: MainActivity): Boolean {
+    val requestId = ModuleStatusProvider.beginLauncherVerification(activity) ?: return false
+    try {
+        activity.sendBroadcast(
+            Intent(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER)
+                .setPackage(ModuleStatusProvider.LAUNCHER_PACKAGE)
+                .putExtra(ModuleStatusProvider.EXTRA_REQUEST_ID, requestId),
+        )
+    } catch (_: Throwable) {
+        return false
+    }
+    // The provider owns a one-shot in-memory latch for this exact nonce. Waiting here avoids
+    // persistent preference writes and the old fixed 150ms ContentProvider polling interval.
+    return ModuleStatusProvider.awaitLauncherVerification(requestId, 500L)
 }
 
 @Composable
@@ -868,8 +886,7 @@ private fun EnvironmentGate(state: GateState, onRefresh: () -> Unit) {
                 GateRow(
                     title = "LSPosed 框架",
                     passed = state.hookReady,
-                    summary = if (state.hookReady) "已在本次启动的 Launcher 中加载"
-                    else "请在 LSPosed 中启用 LauSo 的 Launcher 作用域，然后重启设备。",
+                    summary = state.hookMessage,
                 )
                 InfoDivider()
                 GateRow(

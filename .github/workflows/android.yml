@@ -75,14 +75,18 @@ jobs:
             exit 1
           fi
           "$build_tools/aapt" dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
-          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.5'"
+          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.6'"
+
+      - name: Rename release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/LauSo-${{ github.ref_name }}.apk
 
       - name: Upload release APK
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
           name: LauSo-${{ github.ref_name }}
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/LauSo-${{ github.ref_name }}.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -90,4 +94,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: LauSo ${{ github.ref_name }}
-          files: app/build/outputs/apk/release/app-release.apk
+          body: |
+            ## 改进
+
+            - 开屏环境检测改为本次启动的一次性 Launcher 回执，避免沿用旧心跳状态。
+            - 移除开屏 ContentProvider 轮询和临时状态持久化，缩短正常环境检测等待。
+            - 保留菜单视觉适配、按压反馈恢复和标语点击关闭链路的稳定性修复。
+            - 完善关于页面、Root/LSPosed 门禁和项目发布信息。
+          files: app/build/outputs/apk/release/LauSo-${{ github.ref_name }}.apk
