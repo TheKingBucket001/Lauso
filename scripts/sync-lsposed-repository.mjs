@@ -28,6 +28,7 @@ function readGitConfig(name) {
 const signingKey = process.env.LSPOSED_SYNC_SIGNING_KEY || readGitConfig('user.signingkey');
 const signingProgram = process.env.LSPOSED_SYNC_GPG_SSH_PROGRAM
     || readGitConfig('gpg.ssh.program') || 'ssh-keygen';
+const pushReleaseTag = process.env.LSPOSED_PUSH_RELEASE_TAG === 'true';
 
 function git(args, cwd = targetRoot) {
     execFileSync('git', args, { cwd, stdio: 'inherit' });
@@ -75,7 +76,9 @@ try {
         git(['push', 'origin', 'HEAD:main']);
     }
 
-    if (releaseTag) {
+    // LSPosed normalizes release tags (for example, v0.6.1 -> 5-0.6.1). Do not
+    // create a duplicate source-style tag unless the target workflow explicitly needs it.
+    if (releaseTag && pushReleaseTag) {
         let tagExists = false;
         try {
             execFileSync('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${releaseTag}`], {
