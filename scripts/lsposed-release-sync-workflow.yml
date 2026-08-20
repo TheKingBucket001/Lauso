@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Source release tag to synchronize'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,7 +23,7 @@ jobs:
       - name: Download source release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           source_repo='TheKingBucket001/Lauso'
@@ -33,7 +39,7 @@ jobs:
       - name: Publish LSPosed release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           gh release create "$TAG" release/*.apk \
