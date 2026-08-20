@@ -64,15 +64,18 @@ jobs:
         run: |
           set -euo pipefail
           apk=app/build/outputs/apk/release/app-release.apk
+          build_tools="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$apk"
-          certs=$(apksigner verify --verbose --print-certs "$apk" 2>&1)
+          test -x "$build_tools/apksigner"
+          test -x "$build_tools/aapt"
+          certs=$("$build_tools/apksigner" verify --verbose --print-certs "$apk" 2>&1)
           printf '%s\n' "$certs"
           if printf '%s\n' "$certs" | grep -q 'Android Debug'; then
             echo 'Release APK is debug-signed.' >&2
             exit 1
           fi
-          aapt dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
-          aapt dump badging "$apk" | grep -F "versionName='0.5'"
+          "$build_tools/aapt" dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
+          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.5'"
 
       - name: Upload release APK
         if: startsWith(github.ref, 'refs/tags/v')
