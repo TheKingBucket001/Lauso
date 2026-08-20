@@ -36,11 +36,6 @@ LauSo 让应用专属文字自然融入系统桌面的长按菜单：既能保�
   </tr>
 </table>
 
-## 下载
-
-- [最新版本](https://github.com/TheKingBucket001/Lauso/releases/latest)
-- [全部版本](https://github.com/TheKingBucket001/Lauso/releases)
-
 ## 支持范围
 
 | 项目 | 说明 |

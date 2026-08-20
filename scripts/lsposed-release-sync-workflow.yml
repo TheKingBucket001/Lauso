@@ -1,0 +1,42 @@
+name: Sync LauSo Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download source release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          source_repo='TheKingBucket001/Lauso'
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "LSPosed release $TAG already exists."
+            exit 0
+          fi
+          mkdir -p release
+          gh release download "$TAG" --repo "$source_repo" --pattern '*.apk' --dir release
+          gh api "repos/$source_repo/releases/tags/$TAG" --jq .body > release-notes.md
+          test -s release-notes.md
+
+      - name: Publish LSPosed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" release/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "LauSo $TAG" \
+            --notes-file release-notes.md

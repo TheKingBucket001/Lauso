@@ -107,14 +107,12 @@ jobs:
         with:
           name: LauSo ${{ github.ref_name }}
           body: |
-            ## v0.6.1
+            ## 改进
 
-            v0.6 已将开屏环境检测迁移到本次启动的一次性 Launcher 回执。本版本继续完善该链路及菜单稳定性。
-
-            - 规则存储按应用包名去重，避免重复规则导致管理页崩溃。
-            - 门禁改用单调时钟和回执重试；保存、刷新与设置写入均随 Activity 生命周期取消，避免旧页面回调。
-            - 可选 Launcher Hook 独立降级，popup 关闭后清理材质缓存，减少兼容性失败和 View 滞留风险。
-            - 修正无标语菜单的 divider 与按压反馈边界，并更新展示素材。
+            - 修复重复规则导致管理页崩溃的问题。
+            - 优化 Launcher 回执等待、Root 命令和页面生命周期，减少环境检测误判与旧页面回调。
+            - 提升菜单 Hook 兼容性：可选 Hook 独立降级，关闭菜单后清理材质缓存。
+            - 修正无标语菜单的 divider 与按压反馈边界，并完善发布同步链路。
           files: release/LauSo-${{ github.ref_name }}.apk
 
   sync-lsposed-repository:
@@ -141,8 +139,14 @@ jobs:
           install -d -m 700 ~/.ssh
           printf '%s\n' "$LSPOSED_SYNC_SSH_KEY" > ~/.ssh/lsposed-sync
           chmod 600 ~/.ssh/lsposed-sync
+          ssh-keygen -y -f ~/.ssh/lsposed-sync > ~/.ssh/lsposed-sync.pub
+          chmod 644 ~/.ssh/lsposed-sync.pub
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts
           printf 'Host github.com\n  IdentityFile ~/.ssh/lsposed-sync\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          {
+            echo "LSPOSED_SYNC_SIGNING_KEY=$HOME/.ssh/lsposed-sync.pub"
+            echo "LSPOSED_SYNC_GPG_SSH_PROGRAM=ssh-keygen"
+          } >> "$GITHUB_ENV"
 
       - name: Synchronize LSPosed module repository
         env:
