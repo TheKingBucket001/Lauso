@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose content supplies the MIUIX visual system; this only hosts the window. -->
+    <style name="ModuleTheme" parent="android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#2F74C8</item>
+        <item name="android:navigationBarColor">#E8F1FC</item>
+        <item name="android:statusBarColor">#E8F1FC</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

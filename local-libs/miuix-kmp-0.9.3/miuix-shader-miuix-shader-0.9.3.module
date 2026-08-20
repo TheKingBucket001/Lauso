@@ -1,0 +1,516 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "top.yukonga.miuix.kmp",
+    "module": "miuix-shader",
+    "version": "0.9.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.compose.foundation",
+          "module": "foundation",
+          "version": {
+            "requires": "1.11.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-shader-metadata-0.9.3.jar",
+          "url": "miuix-shader-0.9.3.jar",
+          "size": 5637,
+          "sha512": "97421b8357cfbfdced42ecf16ca83055e7e87a4b3836c7690095680b34e855f317a57a6c0447c8e4123cdf15c6bc53ad018bbb3f6ee8e7b6203acf2f835592dd",
+          "sha256": "dde42cbd9376355e29a33b347d68b76c8b119abb8781a9a839f8883e65c6442a",
+          "sha1": "b2419e6a554f0df2063de39c1970feda0b52fe99",
+          "md5": "1acd18efb4b7fe08657837d36a5c82dc"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "files": [
+        {
+          "name": "miuix-shader-kotlin-0.9.3-sources.jar",
+          "url": "miuix-shader-0.9.3-sources.jar",
+          "size": 4934,
+          "sha512": "b4eeeca56cbf1ca688b0b305108694c2bcd79836e931b17b432a89ebe165ac350e00184edccde24729423420468febbab0154d6f542e5e258a2e326b9bc72047",
+          "sha256": "f03e66c32e516d4637522086d1cd679c06d2c394c31fdf1e6d1bdf66f7355d18",
+          "sha1": "6bfe2f7ddbf0122fcc0d475f9e3f083c5eb64479",
+          "md5": "27f1facff00558ea133244048fae3aee"
+        }
+      ]
+    },
+    {
+      "name": "androidApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-android/0.9.3/miuix-shader-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "androidRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-android/0.9.3/miuix-shader-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "androidSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-android/0.9.3/miuix-shader-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-desktop/0.9.3/miuix-shader-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-desktop/0.9.3/miuix-shader-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-desktop/0.9.3/miuix-shader-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iosarm64/0.9.3/miuix-shader-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iosarm64/0.9.3/miuix-shader-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iosarm64/0.9.3/miuix-shader-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iosarm64/0.9.3/miuix-shader-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iossimulatorarm64/0.9.3/miuix-shader-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iossimulatorarm64/0.9.3/miuix-shader-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iossimulatorarm64/0.9.3/miuix-shader-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-iossimulatorarm64/0.9.3/miuix-shader-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-js/0.9.3/miuix-shader-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-js/0.9.3/miuix-shader-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-js/0.9.3/miuix-shader-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresourcesjs",
+        "org.gradle.usage": "kotlin-multiplatformresourcesjs",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-js/0.9.3/miuix-shader-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-macosarm64/0.9.3/miuix-shader-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-macosarm64/0.9.3/miuix-shader-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-macosarm64/0.9.3/miuix-shader-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-macosarm64/0.9.3/miuix-shader-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-wasm-js/0.9.3/miuix-shader-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-wasm-js/0.9.3/miuix-shader-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-wasm-js/0.9.3/miuix-shader-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresourcesjs",
+        "org.gradle.usage": "kotlin-multiplatformresourcesjs",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-shader-wasm-js/0.9.3/miuix-shader-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-shader-wasm-js",
+        "version": "0.9.3"
+      }
+    }
+  ]
+}

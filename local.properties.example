@@ -1,0 +1,8 @@
+# Formal release signing only. This example points at the project-local key
+# used for local verification. Do not commit local.properties, a keystore,
+# private key material, or signing.properties.
+# The same values are supplied to GitHub Actions through repository Secrets.
+RELEASE_STORE_FILE=lauso-release.keystore
+RELEASE_STORE_PASSWORD=
+RELEASE_KEY_ALIAS=lauso-release
+RELEASE_KEY_PASSWORD=

@@ -1,0 +1,109 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "url": "../../miuix-shader/0.9.3/miuix-shader-0.9.3.module",
+    "group": "top.yukonga.miuix.kmp",
+    "module": "miuix-shader",
+    "version": "0.9.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-shader.aar",
+          "url": "miuix-shader-android-0.9.3.aar",
+          "size": 6006,
+          "sha512": "9c37bc79c24e55c7c3ca2b29081b4aea0e0fd2480acfc5d8fcb2e28e4b7ab467825da32fae57be237a07f3fd93a85b90d8e24b231131f98a5166706de57d06a1",
+          "sha256": "5391d287d76955979c0dc51205209c5f7ced557a81e91dfb573f2a14bea0f249",
+          "sha1": "ae997187d758080677721df4388c1393807fcfad",
+          "md5": "99bbaf65e66a610053801f0b1b53db4e"
+        }
+      ]
+    },
+    {
+      "name": "androidRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.compose.foundation",
+          "module": "foundation",
+          "version": {
+            "requires": "1.11.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-shader.aar",
+          "url": "miuix-shader-android-0.9.3.aar",
+          "size": 6006,
+          "sha512": "9c37bc79c24e55c7c3ca2b29081b4aea0e0fd2480acfc5d8fcb2e28e4b7ab467825da32fae57be237a07f3fd93a85b90d8e24b231131f98a5166706de57d06a1",
+          "sha256": "5391d287d76955979c0dc51205209c5f7ced557a81e91dfb573f2a14bea0f249",
+          "sha1": "ae997187d758080677721df4388c1393807fcfad",
+          "md5": "99bbaf65e66a610053801f0b1b53db4e"
+        }
+      ]
+    },
+    {
+      "name": "androidSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "miuix-shader-android-0.9.3-sources.jar",
+          "url": "miuix-shader-android-0.9.3-sources.jar",
+          "size": 4934,
+          "sha512": "2e08a354af5246b6bec25693fe658f157d3b88546991be98b7f467cacc2fc7ca4809e4ec8c72633348a88f8508f6541268b8df1e0cf9b75025c5a66b1d17bae1",
+          "sha256": "b1ae88bf0a7b4b12dd0f44d166fff6594d35e365e3962d8d48d7d976a5a64cbf",
+          "sha1": "be32083576005edfa5618733cd76ce47c6c4ce01",
+          "md5": "563548407e4c0f1ce19ae6eafe61da5d"
+        }
+      ]
+    }
+  ]
+}

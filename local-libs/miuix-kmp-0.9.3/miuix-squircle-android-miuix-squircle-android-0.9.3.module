@@ -1,0 +1,123 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "url": "../../miuix-squircle/0.9.3/miuix-squircle-0.9.3.module",
+    "group": "top.yukonga.miuix.kmp",
+    "module": "miuix-squircle",
+    "version": "0.9.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "top.yukonga.miuix.kmp",
+          "module": "miuix-shader",
+          "version": {
+            "requires": "0.9.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-squircle.aar",
+          "url": "miuix-squircle-android-0.9.3.aar",
+          "size": 54304,
+          "sha512": "548caf8edfb180fead85945070d82c8ee4a951d3bed85f940b79f81a6e1dedf1dc8925ce91a4bce253690094ce030a02a1fbf79b732069d93dedc0d6b1d78d3a",
+          "sha256": "22c93a3b65dfb5bac75ed5bfa5296f47ae758f5381fb632124c379e9d0a7b549",
+          "sha1": "2fc8d834a3f6c4c351f89cea4ee12e684ba89283",
+          "md5": "69fb26dc781c698d5a455cb15ee2fde4"
+        }
+      ]
+    },
+    {
+      "name": "androidRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "dependencies": [
+        {
+          "group": "top.yukonga.miuix.kmp",
+          "module": "miuix-shader",
+          "version": {
+            "requires": "0.9.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.compose.foundation",
+          "module": "foundation",
+          "version": {
+            "requires": "1.11.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-squircle.aar",
+          "url": "miuix-squircle-android-0.9.3.aar",
+          "size": 54304,
+          "sha512": "548caf8edfb180fead85945070d82c8ee4a951d3bed85f940b79f81a6e1dedf1dc8925ce91a4bce253690094ce030a02a1fbf79b732069d93dedc0d6b1d78d3a",
+          "sha256": "22c93a3b65dfb5bac75ed5bfa5296f47ae758f5381fb632124c379e9d0a7b549",
+          "sha1": "2fc8d834a3f6c4c351f89cea4ee12e684ba89283",
+          "md5": "69fb26dc781c698d5a455cb15ee2fde4"
+        }
+      ]
+    },
+    {
+      "name": "androidSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "files": [
+        {
+          "name": "miuix-squircle-android-0.9.3-sources.jar",
+          "url": "miuix-squircle-android-0.9.3-sources.jar",
+          "size": 37917,
+          "sha512": "3714216d3cf3b80541b41a3f68c63ee2a79dfb14b79b01298f10ae3c24389374ce144536ca961fcddd4341e8fb21a6e6a5a4a706432232b474a991a2f8bbde48",
+          "sha256": "7ba8633b5c4de8e9bc145522200722b82b9bcef53f4f5c0e264af2ab71d16a75",
+          "sha1": "045b00c7bf622c05c28a049c0d8a434840bf3d14",
+          "md5": "c06c58530d1061e04fbfdc7b9feed63f"
+        }
+      ]
+    }
+  ]
+}

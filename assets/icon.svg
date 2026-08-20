@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+  <title id="title">LauSo</title>
+  <desc id="desc">蓝色对话框应用图标，带有两行标语和一个气泡圆点</desc>
+  <rect x="8" y="8" width="92" height="92" rx="10" fill="#0A67C7"/>
+  <path fill="#fff" d="M32 25h44c6.627 0 12 5.373 12 12v34c0 6.627-5.373 12-12 12H51L38 93V83h-6c-6.627 0-12-5.373-12-12V37c0-6.627 5.373-12 12-12Z"/>
+  <path fill="#0A67C7" d="M35 43h38v5H35zM35 56h27v5H35z"/>
+  <circle cx="76" cy="63" r="6" fill="#59C7E8"/>
+</svg>

@@ -1,0 +1,4 @@
+-keep,allowoptimization class dev.bucket.launcherslogan.LauncherSloganModule { *; }
+-keep,allowoptimization class dev.bucket.launcherslogan.RuleStore { *; }
+-keep,allowoptimization class dev.bucket.launcherslogan.SloganRule { *; }
+-keep,allowoptimization class dev.bucket.launcherslogan.ModuleStatusProvider { *; }

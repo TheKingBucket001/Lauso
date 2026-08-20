@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="module_name">LauSo</string>
+    <string name="module_description">LauSo：为系统桌面应用图标长按菜单添加自定义标语。</string>
+</resources>

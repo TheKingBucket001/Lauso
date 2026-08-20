@@ -1,0 +1,123 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+import java.util.Properties
+
+// Release credentials are supplied by the environment in CI or by the ignored
+// local.properties file. No keystore or signing.properties belongs in the repo.
+def localSigningProperties = new Properties()
+def localSigningFile = rootProject.file('local.properties')
+if (localSigningFile.isFile()) {
+    localSigningFile.withInputStream { localSigningProperties.load(it) }
+}
+def signingSecret = { String name ->
+    def environmentValue = System.getenv(name)
+    if (environmentValue != null && !environmentValue.trim().isEmpty()) {
+        return environmentValue.trim()
+    }
+    def localValue = localSigningProperties.getProperty(name)
+    return localValue == null ? null : localValue.trim()
+}
+def releaseStoreFilePath = signingSecret('RELEASE_STORE_FILE')
+def releaseStorePassword = signingSecret('RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = signingSecret('RELEASE_KEY_ALIAS')
+def releaseKeyPassword = signingSecret('RELEASE_KEY_PASSWORD')
+def releaseStoreFile = releaseStoreFilePath == null ? null : rootProject.file(releaseStoreFilePath)
+def hasReleaseSigning = releaseStoreFile != null
+        && releaseStoreFile.isFile()
+        && releaseStorePassword != null
+        && !releaseStorePassword.isEmpty()
+        && releaseKeyAlias != null
+        && !releaseKeyAlias.isEmpty()
+        && releaseKeyPassword != null
+        && !releaseKeyPassword.isEmpty()
+
+android {
+    namespace 'dev.bucket.launcherslogan'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId 'dev.bucket.launcherslogan'
+        minSdk 26
+        targetSdk 36
+        versionCode 3
+        versionName '0.5'
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create('release') {
+                storeFile releaseStoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+                enableV4Signing false
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Local builds remain testable with the Android debug key. CI release tags
+            // must run checkReleaseSigning first and will use the formal key above.
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.getByName('release')
+            } else {
+                signingConfig signingConfigs.debug
+            }
+        }
+    }
+
+    packaging {
+        resources {
+            merges += ['META-INF/xposed/**']
+            excludes += ['kotlin/**', 'META-INF/com/android/build/**', 'META-INF/version-control-info.textproto']
+        }
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.register('checkReleaseSigning') {
+    group = 'signing'
+    description = 'Verifies that a formal release keystore is configured.'
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException(
+                    'Formal release signing is not configured. Set RELEASE_STORE_FILE, '
+                            + 'RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD.'
+            )
+        }
+    }
+}
+
+tasks.register('signRelease') {
+    group = 'signing'
+    description = 'Builds the release APK with the configured formal signing key.'
+    dependsOn('checkReleaseSigning')
+    dependsOn('assembleRelease')
+}
+
+dependencies {
+    compileOnly files('../local-libs/libxposed-api-102.0.0.aar')
+    implementation 'androidx.activity:activity-compose:1.12.4'
+    implementation 'androidx.compose.animation:animation:1.11.2'
+    implementation 'top.yukonga.miuix.kmp:miuix-ui:0.9.3'
+    implementation files('../local-libs/miuix-preference-android-0.9.3.aar')
+}

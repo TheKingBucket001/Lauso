@@ -1,0 +1,551 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "top.yukonga.miuix.kmp",
+    "module": "miuix-ui",
+    "version": "0.9.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencies": [
+        {
+          "group": "top.yukonga.miuix.kmp",
+          "module": "miuix-core",
+          "version": {
+            "requires": "0.9.3"
+          }
+        },
+        {
+          "group": "top.yukonga.miuix.kmp",
+          "module": "miuix-squircle",
+          "version": {
+            "requires": "0.9.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.compose.foundation",
+          "module": "foundation",
+          "version": {
+            "requires": "1.11.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.0"
+          }
+        },
+        {
+          "group": "androidx.navigationevent",
+          "module": "navigationevent-compose",
+          "version": {
+            "requires": "1.1.2"
+          }
+        },
+        {
+          "group": "org.jetbrains.compose.material3",
+          "module": "material3-window-size-class",
+          "version": {
+            "requires": "1.9.0"
+          }
+        },
+        {
+          "group": "com.materialkolor",
+          "module": "material-color-utilities",
+          "version": {
+            "requires": "4.1.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "miuix-ui-metadata-0.9.3.jar",
+          "url": "miuix-ui-0.9.3.jar",
+          "size": 93344,
+          "sha512": "8ad72f610834c7dd9231fe8e8fcff998e130ba1cb4c8ff524b27847075d57b35e31bf1050117bd85f147c85a58344f27f2898419a7c2c6d011264534d67089d0",
+          "sha256": "cfebd58bdbe8bc06d9a72392bf04cdd36872720d5a42742434d51e9dca44091e",
+          "sha1": "1851013a8c36c0c4290bc77ad9aaaec0176a7e1a",
+          "md5": "b904085178ca4d9b7d51dfba2cff4543"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "files": [
+        {
+          "name": "miuix-ui-kotlin-0.9.3-sources.jar",
+          "url": "miuix-ui-0.9.3-sources.jar",
+          "size": 220536,
+          "sha512": "290e0a32d54db2f34cdbfdd89e34da48a55ab554c76718c6be6af7bc20f23cd6cb91a7b51f0b3478baf4b07a0f41c3e54d7b72d5b33987bd7091182af6c9c98a",
+          "sha256": "e9ad6b08278a799887a1cba9dac1e7787fd67331d71df4c27c1f8073b2935ef6",
+          "sha1": "0eaf5d49a7faa11922bf77a5be5d354f64447e92",
+          "md5": "abd46dd2a677354e4ffcce5738b38d72"
+        }
+      ]
+    },
+    {
+      "name": "androidApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-android/0.9.3/miuix-ui-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "androidRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-android/0.9.3/miuix-ui-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "androidSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "android",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-android/0.9.3/miuix-ui-android-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-android",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-desktop/0.9.3/miuix-ui-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-desktop/0.9.3/miuix-ui-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "desktopSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-desktop/0.9.3/miuix-ui-desktop-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-desktop",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iosarm64/0.9.3/miuix-ui-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iosarm64/0.9.3/miuix-ui-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iosarm64/0.9.3/miuix-ui-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iosarm64/0.9.3/miuix-ui-iosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iossimulatorarm64/0.9.3/miuix-ui-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iossimulatorarm64/0.9.3/miuix-ui-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iossimulatorarm64/0.9.3/miuix-ui-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-iossimulatorarm64/0.9.3/miuix-ui-iossimulatorarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-iossimulatorarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-js/0.9.3/miuix-ui-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-js/0.9.3/miuix-ui-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-js/0.9.3/miuix-ui-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "jsResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresourcesjs",
+        "org.gradle.usage": "kotlin-multiplatformresourcesjs",
+        "org.jetbrains.kotlin.js.compiler": "ir",
+        "org.jetbrains.kotlin.platform.type": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-js/0.9.3/miuix-ui-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64ApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-macosarm64/0.9.3/miuix-ui-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-macosarm64/0.9.3/miuix-ui-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64ResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresources",
+        "org.gradle.usage": "kotlin-multiplatformresources",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-macosarm64/0.9.3/miuix-ui-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "macosArm64MetadataElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-macosarm64/0.9.3/miuix-ui-macosarm64-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-macosarm64",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-wasm-js/0.9.3/miuix-ui-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-wasm-js/0.9.3/miuix-ui-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-wasm-js/0.9.3/miuix-ui-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-wasm-js",
+        "version": "0.9.3"
+      }
+    },
+    {
+      "name": "wasmJsResourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "non-jvm",
+        "org.gradle.libraryelements": "kotlin-multiplatformresourcesjs",
+        "org.gradle.usage": "kotlin-multiplatformresourcesjs",
+        "org.jetbrains.kotlin.platform.type": "wasm",
+        "org.jetbrains.kotlin.wasm.target": "js"
+      },
+      "available-at": {
+        "url": "../../miuix-ui-wasm-js/0.9.3/miuix-ui-wasm-js-0.9.3.module",
+        "group": "top.yukonga.miuix.kmp",
+        "module": "miuix-ui-wasm-js",
+        "version": "0.9.3"
+      }
+    }
+  ]
+}
