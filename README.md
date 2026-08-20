@@ -19,45 +19,53 @@
 
 ## 项目简介
 
-LauSo 为 ColorOS Launcher 的应用图标长按菜单添加可配置标语，并提供紧凑菜单、视觉适配和自定义气泡设置。
+LauSo 是为 ColorOS 系统桌面设计的 LSPosed 模块。它在应用图标长按菜单中加入可按应用配置的标语，并提供菜单外观与系统菜单项管理。
 
-模块只在 `com.android.launcher` 进程中工作，不修改系统 APK，不常驻后台服务，也不读取其它应用的内容。
+## 下载
 
-## 模块功能
+- [最新版本](https://github.com/TheKingBucket001/Lauso/releases/latest)
+- [全部版本](https://github.com/TheKingBucket001/Lauso/releases)
 
-- 为应用图标长按菜单添加主标语和副标语。
-- 支持普通菜单、紧凑菜单和视觉适配选项。
-- 视觉适配只缩小标语下方空间约 35%。
-- 支持为空或自定义的点击气泡，空气泡不会显示替代提示。
-- 标语点击后关闭菜单并恢复图标状态，不跳转到桌面或其它应用。
-- 启动时检查 LSPosed Launcher 作用域和 Root 状态。
-- 关于页面提供源码、更新入口和版本信息。
+## 支持范围
 
-## 构建
-
-```powershell
-.\gradlew.bat :app:assembleDebug --offline --no-daemon
-```
-
-正式签名构建使用项目根目录中被 Git 忽略的 `lauso-release.keystore` 和 `local.properties`，或在 CI 中提供 `RELEASE_*` 环境变量。正式发布由 `.github/workflows/android.yml` 的 `v*` 标签流程完成。
-
-## 发布
-
-在已登录 GitHub CLI 且本机 SSH 签名密钥可用的终端中运行：
-
-```powershell
-node .\scripts\publish-github.mjs
-```
-
-脚本使用 `git@github.com:TheKingBucket001/Lauso.git` 推送，并用账户 SSH 签名密钥签署提交；它只提交源代码和配置。keystore、`local.properties`、APK 与构建目录均被 `.gitignore` 排除。仓库名为 `Lauso`，应用显示名保持 `LauSo`。
-
-## 项目链接
-
-| 链接 | 地址 |
+| 项目 | 说明 |
 | --- | --- |
-| 主页 | [TheKingBucket001/Lauso](https://github.com/TheKingBucket001/Lauso) |
-| 源代码 | [TheKingBucket001/Lauso](https://github.com/TheKingBucket001/Lauso) |
-| 问题反馈 | [Issues](https://github.com/TheKingBucket001/Lauso/issues) |
+| 已验证系统 | ColorOS 16 / Android 16 |
+| 已验证系统桌面 | `com.android.launcher` 16.6.17 |
+| 框架要求 | LSPosed API 101 或更高版本，设备已获得 Root 权限 |
+| 模块作用域 | 系统桌面：`com.android.launcher` |
+
+不同 ColorOS 版本或系统桌面版本的菜单结构可能变化。未列出的系统版本请先自行验证，并在反馈时附上系统桌面版本。
+
+## 安装与启用
+
+1. 从 [Release](https://github.com/TheKingBucket001/Lauso/releases/latest) 下载并安装 LauSo。
+2. 在 LSPosed 中启用模块，作用域选择“系统桌面” `com.android.launcher`。
+3. 重启设备后打开 LauSo，完成 Root 授权检查。
+4. 点击添加，填写应用包名和主标语；副标语与点击气泡均为可选项。
+5. 返回桌面，长按对应应用图标并重新打开菜单即可查看效果。
+
+## 功能
+
+- 按应用设置主标语、副标语和点击气泡。
+- 点击标语后收起菜单；未填写点击气泡时不显示提示。
+- 提供半透明白菜单、紧凑菜单、视觉舒适和关闭全屏背景模糊选项。
+- 视觉舒适仅在紧凑菜单开启时可用，只调整标语下方空白。
+- 可移除“更多”入口、隐藏应用快捷方式，或按需隐藏隐私锁、应用详情、分享、编辑和服务卡片等系统菜单项。
+
+## 使用提示
+
+- 保存规则或外观设置后，需要重新打开应用长按菜单才能看到变化。
+- 删除规则后，对应应用会恢复原有的长按菜单。
+- 模块未在 LSPosed 中加载或 Root 授权未通过时，应用会提示先完成环境检查。
+
+## 问题反馈
+
+请在 [Issues](https://github.com/TheKingBucket001/Lauso/issues) 提交问题，并附上以下信息：
+
+- LauSo 版本、Android 版本、ColorOS 版本与系统桌面版本。
+- LSPosed 版本，以及是否已启用 `com.android.launcher` 作用域。
+- 可复现步骤、相关设置与截图或日志。
 
 ## 许可证
 
