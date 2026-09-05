@@ -74,6 +74,11 @@ public final class LauncherSloganModule extends XposedModule {
             new WeakHashMap<>();
     private static final WeakHashMap<View, Drawable> ORIGINAL_ROW_BACKGROUNDS =
             new WeakHashMap<>();
+    // ColorOS wraps the interactive rows in white structural containers (for example
+    // system_shortcut_icons). They must be transparent when the outer panel becomes glass,
+    // otherwise each wrapper paints a long rectangular white block over the surface.
+    private static final WeakHashMap<View, Drawable> ORIGINAL_STRUCTURAL_BACKGROUNDS =
+            new WeakHashMap<>();
     private static final WeakHashMap<Object, Float> ORIGINAL_BLUR_ALPHA =
             new WeakHashMap<>();
     private static final WeakHashMap<Object, Boolean> ORIGINAL_ADD_BLUR =
@@ -114,6 +119,9 @@ public final class LauncherSloganModule extends XposedModule {
     private static final int SLOGAN_MARKER_INSET_DP = 5;
     private static final int IPHONE_OUTER_VERTICAL_INSET_DP = 2;
     private static final int IPHONE_PANEL_RADIUS_DP = 20;
+    private static final int IPHONE_PANEL_FILL_ALPHA = 212;
+    private static final int IPHONE_PANEL_BORDER_ALPHA = 72;
+    private static final int IPHONE_PANEL_BORDER_DP = 1;
 
     private final AtomicBoolean hookInstalled = new AtomicBoolean(false);
     private final AtomicBoolean verificationReceiverInstalled = new AtomicBoolean(false);
@@ -516,14 +524,20 @@ public final class LauncherSloganModule extends XposedModule {
         material.setShape(GradientDrawable.RECTANGLE);
         // Keep the home screen sharp by default. The alpha lets the wallpaper tint the
         // surface slightly, matching the iOS material without a full-screen blur layer.
-        material.setColor(Color.argb(228, 250, 251, 255));
+        material.setColor(Color.argb(IPHONE_PANEL_FILL_ALPHA, 250, 251, 255));
+        // A restrained white edge catches the glass highlight without creating another opaque
+        // panel or changing the hit bounds of any menu row.
+        material.setStroke(dp(container.getContext(), IPHONE_PANEL_BORDER_DP),
+                Color.argb(IPHONE_PANEL_BORDER_ALPHA, 255, 255, 255));
         material.setCornerRadius(dp(container.getContext(), IPHONE_PANEL_RADIUS_DP));
         container.setBackground(material);
         container.setClipToOutline(true);
         container.setOutlineProvider(roundOutline(container, IPHONE_PANEL_RADIUS_DP));
         container.setElevation(dp(container.getContext(), 10));
         if (container instanceof ViewGroup) {
-            makeShortcutRowsTransparent((ViewGroup) container, container.getContext());
+            ViewGroup group = (ViewGroup) container;
+            makeStructuralContainersTransparent(group, container.getContext());
+            makeShortcutRowsTransparent(group, container.getContext());
         }
     }
 
@@ -534,7 +548,11 @@ public final class LauncherSloganModule extends XposedModule {
             container.setClipToOutline(ORIGINAL_CONTAINER_CLIP.getOrDefault(container, false));
             container.setOutlineProvider(ORIGINAL_CONTAINER_OUTLINES.get(container));
         }
-        if (container instanceof ViewGroup) restoreShortcutRows((ViewGroup) container);
+        if (container instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) container;
+            restoreStructuralContainerBackgrounds(group);
+            restoreShortcutRows(group);
+        }
     }
 
     /**
@@ -548,6 +566,7 @@ public final class LauncherSloganModule extends XposedModule {
         ORIGINAL_CONTAINER_CLIP.remove(view);
         ORIGINAL_CONTAINER_OUTLINES.remove(view);
         ORIGINAL_ROW_BACKGROUNDS.remove(view);
+        ORIGINAL_STRUCTURAL_BACKGROUNDS.remove(view);
         if (!(view instanceof ViewGroup)) return;
         ViewGroup group = (ViewGroup) view;
         for (int index = 0; index < group.getChildCount(); index++) {
@@ -603,6 +622,44 @@ public final class LauncherSloganModule extends XposedModule {
         for (int index = 0; index < group.getChildCount(); index++) {
             View child = group.getChildAt(index);
             if (child instanceof ViewGroup) restoreShortcutRows((ViewGroup) child);
+        }
+    }
+
+    private static void makeStructuralContainersTransparent(ViewGroup outer, Context context) {
+        int textId = context.getResources().getIdentifier("bubble_text", "id", LAUNCHER_PACKAGE);
+        clearStructuralContainerBackgrounds(outer, textId, true);
+    }
+
+    private static void clearStructuralContainerBackgrounds(
+            View view, int textId, boolean isOuter) {
+        if (!(view instanceof ViewGroup)) {
+            return;
+        }
+        ViewGroup group = (ViewGroup) view;
+        // A row owns its own press/ripple surface. Only clear non-interactive wrappers.
+        if (!isOuter && !isShortcutRow(group, textId)) {
+            Drawable background = group.getBackground();
+            if (background != null
+                    && !(background instanceof ColorDrawable
+                    && ((ColorDrawable) background).getColor() == Color.TRANSPARENT)) {
+                ORIGINAL_STRUCTURAL_BACKGROUNDS.putIfAbsent(group, background);
+                group.setBackgroundColor(Color.TRANSPARENT);
+            }
+        }
+        for (int index = 0; index < group.getChildCount(); index++) {
+            clearStructuralContainerBackgrounds(group.getChildAt(index), textId, false);
+        }
+    }
+
+    private static void restoreStructuralContainerBackgrounds(ViewGroup group) {
+        if (ORIGINAL_STRUCTURAL_BACKGROUNDS.containsKey(group)) {
+            group.setBackground(ORIGINAL_STRUCTURAL_BACKGROUNDS.get(group));
+        }
+        for (int index = 0; index < group.getChildCount(); index++) {
+            View child = group.getChildAt(index);
+            if (child instanceof ViewGroup) {
+                restoreStructuralContainerBackgrounds((ViewGroup) child);
+            }
         }
     }
 
