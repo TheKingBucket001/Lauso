@@ -13,6 +13,8 @@
 
 [下载模块](https://github.com/TheKingBucket001/Lauso/releases/latest) · [源代码](https://github.com/TheKingBucket001/Lauso) · [问题反馈](https://github.com/TheKingBucket001/Lauso/issues)
 
+当前版本：`v0.6.2`
+
 </div>
 
 ---

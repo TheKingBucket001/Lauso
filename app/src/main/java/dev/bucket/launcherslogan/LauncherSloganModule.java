@@ -28,6 +28,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewTreeObserver;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.os.Handler;
@@ -43,6 +44,7 @@ import android.view.KeyEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
+import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -74,10 +76,22 @@ public final class LauncherSloganModule extends XposedModule {
             new WeakHashMap<>();
     private static final WeakHashMap<View, Drawable> ORIGINAL_ROW_BACKGROUNDS =
             new WeakHashMap<>();
+    private static final WeakHashMap<View, Drawable> ORIGINAL_ROW_FOREGROUNDS =
+            new WeakHashMap<>();
+    private static final WeakHashMap<View, Drawable> APPLIED_ROW_FOREGROUNDS =
+            new WeakHashMap<>();
+    private static final WeakHashMap<View, Integer> APPLIED_ROW_RIPPLE_TOP_INSETS =
+            new WeakHashMap<>();
     // ColorOS wraps the interactive rows in white structural containers (for example
     // system_shortcut_icons). They must be transparent when the outer panel becomes glass,
     // otherwise each wrapper paints a long rectangular white block over the surface.
     private static final WeakHashMap<View, Drawable> ORIGINAL_STRUCTURAL_BACKGROUNDS =
+            new WeakHashMap<>();
+    private static final WeakHashMap<View, Float> ORIGINAL_STRUCTURAL_ELEVATIONS =
+            new WeakHashMap<>();
+    private static final WeakHashMap<View, Drawable> APPLIED_PANEL_BACKGROUNDS =
+            new WeakHashMap<>();
+    private static final WeakHashMap<View, PopupMaterialGuard> MATERIAL_PRE_DRAW_GUARDS =
             new WeakHashMap<>();
     private static final WeakHashMap<Object, Float> ORIGINAL_BLUR_ALPHA =
             new WeakHashMap<>();
@@ -119,9 +133,15 @@ public final class LauncherSloganModule extends XposedModule {
     private static final int SLOGAN_MARKER_INSET_DP = 5;
     private static final int IPHONE_OUTER_VERTICAL_INSET_DP = 2;
     private static final int IPHONE_PANEL_RADIUS_DP = 20;
-    private static final int IPHONE_PANEL_FILL_ALPHA = 212;
-    private static final int IPHONE_PANEL_BORDER_ALPHA = 72;
-    private static final int IPHONE_PANEL_BORDER_DP = 1;
+    // Apple-style glass keeps the background recognizable but mutes busy icon colors enough
+    // for the foreground menu to remain legible without a full-screen blur.
+    private static final int IPHONE_PANEL_FILL_ALPHA = 246;
+    private static final int IPHONE_PANEL_FILL_ALPHA_LOW = 234;
+    private static final int IPHONE_PANEL_BORDER_ALPHA = 176;
+    private static final int IPHONE_PANEL_BORDER_DP = 2;
+    // Oplus can restore its native structural drawable while it finishes opening the popup.
+    // Guard only the opening window; a permanent listener would put work on every Launcher frame.
+    private static final long MATERIAL_GUARD_DURATION_MS = 220L;
 
     private final AtomicBoolean hookInstalled = new AtomicBoolean(false);
     private final AtomicBoolean verificationReceiverInstalled = new AtomicBoolean(false);
@@ -185,16 +205,28 @@ public final class LauncherSloganModule extends XposedModule {
             Method onCreateOpenAnimation = popupClass.getDeclaredMethod(
                     "onCreateOpenAnimation", AnimatorSet.class);
             hook(onCreateOpenAnimation).intercept(chain -> {
+                Object popup = chain.getThisObject();
                 try {
-                    stabilizePopupMaterial(chain.getThisObject());
+                    stabilizePopupMaterial(popup);
                 } catch (Throwable error) {
                     log(Log.WARN, TAG, "Unable to prepare popup material", error);
                 }
-                Object result = chain.proceed();
+                Object result;
                 try {
+                    result = chain.proceed();
+                } catch (Throwable error) {
+                    clearPopupMaterialState(popup);
+                    throw error;
+                }
+                try {
+                    // ColorOS rebuilds the native row backgrounds while creating the animator.
+                    // Apply the glass surface again after that rebuild, otherwise the restored
+                    // system selector paints rectangular white row blocks over the panel.
+                    stabilizePopupMaterial(popup);
                     // Oplus starts this AnimatorSet only after this callback returns. Rebuild
                     // the first divider only when the LauSo row created that boundary.
-                    restoreNormalNativeDividersBeforeOpenAnimation(chain.getThisObject());
+                    restoreNormalNativeDividersBeforeOpenAnimation(popup);
+                    armPopupMaterialGuard(popup);
                 } catch (Throwable error) {
                     log(Log.WARN, TAG, "Unable to restore regular-menu divider", error);
                 }
@@ -231,6 +263,19 @@ public final class LauncherSloganModule extends XposedModule {
             });
         } catch (Throwable error) {
             log(Log.WARN, TAG, "Close material hook unavailable", error);
+        }
+
+        try {
+            Method closeComplete = popupClass.getDeclaredMethod("closeComplete");
+            hook(closeComplete).intercept(chain -> {
+                try {
+                    return chain.proceed();
+                } finally {
+                    clearPopupMaterialState(chain.getThisObject());
+                }
+            });
+        } catch (Throwable error) {
+            log(Log.WARN, TAG, "Popup completion cleanup hook unavailable", error);
         }
     }
 
@@ -505,11 +550,13 @@ public final class LauncherSloganModule extends XposedModule {
         shortcuts.addView(row, 0);
     }
 
-    private static void applyPanelBackground(Object popup, boolean translucent) {
+    private static void applyPanelBackground(
+            Object popup, boolean translucent, boolean compact, boolean visualComfort) {
         Object value = readFieldUnchecked(popup, "mAllPopupShortcutContainer");
         if (!(value instanceof View)) return;
         View container = (View) value;
         if (!translucent) {
+            removePopupMaterialGuard(container);
             restorePanelBackground(container);
             clearPanelBackgroundState(container);
             return;
@@ -520,24 +567,42 @@ public final class LauncherSloganModule extends XposedModule {
             ORIGINAL_CONTAINER_CLIP.put(container, container.getClipToOutline());
             ORIGINAL_CONTAINER_OUTLINES.put(container, container.getOutlineProvider());
         }
-        GradientDrawable material = new GradientDrawable();
-        material.setShape(GradientDrawable.RECTANGLE);
-        // Keep the home screen sharp by default. The alpha lets the wallpaper tint the
-        // surface slightly, matching the iOS material without a full-screen blur layer.
-        material.setColor(Color.argb(IPHONE_PANEL_FILL_ALPHA, 250, 251, 255));
-        // A restrained white edge catches the glass highlight without creating another opaque
-        // panel or changing the hit bounds of any menu row.
-        material.setStroke(dp(container.getContext(), IPHONE_PANEL_BORDER_DP),
-                Color.argb(IPHONE_PANEL_BORDER_ALPHA, 255, 255, 255));
-        material.setCornerRadius(dp(container.getContext(), IPHONE_PANEL_RADIUS_DP));
-        container.setBackground(material);
+        applyTranslucentPanelBackground(container);
         container.setClipToOutline(true);
         container.setOutlineProvider(roundOutline(container, IPHONE_PANEL_RADIUS_DP));
-        container.setElevation(dp(container.getContext(), 10));
+        // ArrowPopup already owns the outer 2dp elevation. Adding another elevated inner panel
+        // makes its shadow double and expand visibly while ColorOS scales the popup open/closed.
+        container.setElevation(0f);
         if (container instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) container;
             makeStructuralContainersTransparent(group, container.getContext());
-            makeShortcutRowsTransparent(group, container.getContext());
+            makeShortcutRowsTransparent(group, container.getContext(), compact, visualComfort);
+        }
+    }
+
+    private static void applyTranslucentPanelBackground(View container) {
+        Drawable applied = APPLIED_PANEL_BACKGROUNDS.get(container);
+        if (applied == null) {
+            GradientDrawable material = new GradientDrawable();
+            material.setShape(GradientDrawable.RECTANGLE);
+            // Keep the home screen sharp by default. The alpha lets the wallpaper tint the
+            // surface slightly, matching the iOS material without a full-screen blur layer.
+            material.setColors(new int[]{
+                    Color.argb(IPHONE_PANEL_FILL_ALPHA, 255, 255, 255),
+                    Color.argb(IPHONE_PANEL_FILL_ALPHA_LOW, 246, 249, 255),
+                    Color.argb(IPHONE_PANEL_FILL_ALPHA, 255, 255, 255),
+            });
+            material.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+            // A restrained white edge catches the glass highlight without creating another
+            // opaque panel or changing the hit bounds of any menu row.
+            material.setStroke(dp(container.getContext(), IPHONE_PANEL_BORDER_DP),
+                    Color.argb(IPHONE_PANEL_BORDER_ALPHA, 255, 255, 255));
+            material.setCornerRadius(dp(container.getContext(), IPHONE_PANEL_RADIUS_DP));
+            applied = material;
+            APPLIED_PANEL_BACKGROUNDS.put(container, applied);
+        }
+        if (container.getBackground() != applied) {
+            container.setBackground(applied);
         }
     }
 
@@ -566,7 +631,12 @@ public final class LauncherSloganModule extends XposedModule {
         ORIGINAL_CONTAINER_CLIP.remove(view);
         ORIGINAL_CONTAINER_OUTLINES.remove(view);
         ORIGINAL_ROW_BACKGROUNDS.remove(view);
+        ORIGINAL_ROW_FOREGROUNDS.remove(view);
+        APPLIED_ROW_FOREGROUNDS.remove(view);
+        APPLIED_ROW_RIPPLE_TOP_INSETS.remove(view);
         ORIGINAL_STRUCTURAL_BACKGROUNDS.remove(view);
+        ORIGINAL_STRUCTURAL_ELEVATIONS.remove(view);
+        APPLIED_PANEL_BACKGROUNDS.remove(view);
         if (!(view instanceof ViewGroup)) return;
         ViewGroup group = (ViewGroup) view;
         for (int index = 0; index < group.getChildCount(); index++) {
@@ -605,6 +675,7 @@ public final class LauncherSloganModule extends XposedModule {
         Object value = readFieldUnchecked(popup, "mAllPopupShortcutContainer");
         if (value instanceof View) {
             View container = (View) value;
+            removePopupMaterialGuard(container);
             restorePanelBackground(container);
             clearPanelBackgroundState(container);
         }
@@ -618,6 +689,7 @@ public final class LauncherSloganModule extends XposedModule {
                 "bubble_text", "id", LAUNCHER_PACKAGE);
         if (isShortcutRow(group, textId) && ORIGINAL_ROW_BACKGROUNDS.containsKey(group)) {
             group.setBackground(ORIGINAL_ROW_BACKGROUNDS.get(group));
+            group.setForeground(ORIGINAL_ROW_FOREGROUNDS.get(group));
         }
         for (int index = 0; index < group.getChildCount(); index++) {
             View child = group.getChildAt(index);
@@ -627,27 +699,46 @@ public final class LauncherSloganModule extends XposedModule {
 
     private static void makeStructuralContainersTransparent(ViewGroup outer, Context context) {
         int textId = context.getResources().getIdentifier("bubble_text", "id", LAUNCHER_PACKAGE);
-        clearStructuralContainerBackgrounds(outer, textId, true);
+        int popupContainerId = context.getResources().getIdentifier(
+                "popup_shortcut_container", "id", LAUNCHER_PACKAGE);
+        int systemShortcutIconsId = context.getResources().getIdentifier(
+                "system_shortcut_icons", "id", LAUNCHER_PACKAGE);
+        View popupContainer = popupContainerId == 0 ? null : outer.findViewById(popupContainerId);
+        clearStructuralAncestorPath(popupContainer, outer, textId);
+        View systemShortcutIcons = systemShortcutIconsId == 0
+                ? null : outer.findViewById(systemShortcutIconsId);
+        clearStructuralContainerBackground(systemShortcutIcons, textId);
     }
 
-    private static void clearStructuralContainerBackgrounds(
-            View view, int textId, boolean isOuter) {
-        if (!(view instanceof ViewGroup)) {
+    private static void clearStructuralAncestorPath(View start, View outer, int textId) {
+        View current = start;
+        while (current != null && current != outer) {
+            clearStructuralContainerBackground(current, textId);
+            Object parent = current.getParent();
+            current = parent instanceof View ? (View) parent : null;
+        }
+    }
+
+    private static void clearStructuralContainerBackground(View view, int textId) {
+        if (!(view instanceof ViewGroup) || isShortcutRow(view, textId)) {
             return;
         }
+        // The target Launcher APK puts the opaque white layers on the popup container path and
+        // system_shortcut_icons. Do not traverse arbitrary descendants: a future OEM layout may
+        // place a real control there, whose own background must remain intact.
         ViewGroup group = (ViewGroup) view;
-        // A row owns its own press/ripple surface. Only clear non-interactive wrappers.
-        if (!isOuter && !isShortcutRow(group, textId)) {
-            Drawable background = group.getBackground();
-            if (background != null
-                    && !(background instanceof ColorDrawable
-                    && ((ColorDrawable) background).getColor() == Color.TRANSPARENT)) {
-                ORIGINAL_STRUCTURAL_BACKGROUNDS.putIfAbsent(group, background);
-                group.setBackgroundColor(Color.TRANSPARENT);
-            }
+        Drawable background = group.getBackground();
+        if (background != null
+                && !(background instanceof ColorDrawable
+                && ((ColorDrawable) background).getColor() == Color.TRANSPARENT)) {
+            ORIGINAL_STRUCTURAL_BACKGROUNDS.putIfAbsent(group, background);
+            group.setBackgroundColor(Color.TRANSPARENT);
         }
-        for (int index = 0; index < group.getChildCount(); index++) {
-            clearStructuralContainerBackgrounds(group.getChildAt(index), textId, false);
+        if (!ORIGINAL_STRUCTURAL_ELEVATIONS.containsKey(group)) {
+            ORIGINAL_STRUCTURAL_ELEVATIONS.put(group, group.getElevation());
+        }
+        if (Float.compare(group.getElevation(), 0f) != 0) {
+            group.setElevation(0f);
         }
     }
 
@@ -655,11 +746,114 @@ public final class LauncherSloganModule extends XposedModule {
         if (ORIGINAL_STRUCTURAL_BACKGROUNDS.containsKey(group)) {
             group.setBackground(ORIGINAL_STRUCTURAL_BACKGROUNDS.get(group));
         }
+        if (ORIGINAL_STRUCTURAL_ELEVATIONS.containsKey(group)) {
+            group.setElevation(ORIGINAL_STRUCTURAL_ELEVATIONS.get(group));
+        }
         for (int index = 0; index < group.getChildCount(); index++) {
             View child = group.getChildAt(index);
             if (child instanceof ViewGroup) {
                 restoreStructuralContainerBackgrounds((ViewGroup) child);
             }
+        }
+    }
+
+    private static void armPopupMaterialGuard(Object popup) {
+        Object value = readFieldUnchecked(popup, "mAllPopupShortcutContainer");
+        if (!(value instanceof ViewGroup)) return;
+        ViewGroup container = (ViewGroup) value;
+        PopupMaterialGuard existing = MATERIAL_PRE_DRAW_GUARDS.get(container);
+        if (existing != null) {
+            existing.arm();
+            return;
+        }
+        ViewTreeObserver observer = container.getViewTreeObserver();
+        if (!observer.isAlive()) return;
+        Context context = (Context) readFieldUnchecked(popup, "mContext");
+        if (context == null || !MenuMaterialSettings.readPanel(context)) return;
+        PopupMaterialGuard guard = new PopupMaterialGuard(
+                container,
+                observer,
+                context,
+                MenuMaterialSettings.readCompact(context),
+                MenuMaterialSettings.readVisualComfort(context));
+        MATERIAL_PRE_DRAW_GUARDS.put(container, guard);
+        guard.attach();
+    }
+
+    private static void removePopupMaterialGuard(View container) {
+        PopupMaterialGuard guard = MATERIAL_PRE_DRAW_GUARDS.remove(container);
+        if (guard != null) guard.detach();
+    }
+
+    private static void reapplyPopupMaterialFrame(
+            ViewGroup container, Context context, boolean compact, boolean visualComfort) {
+        // A cleared state means the popup is closing or material mode was disabled while it was
+        // visible. Do not rematerialize a container after that lifecycle boundary.
+        if (!ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(container)) return;
+        applyTranslucentPanelBackground(container);
+        container.setClipToOutline(true);
+        container.setOutlineProvider(roundOutline(container, IPHONE_PANEL_RADIUS_DP));
+        container.setElevation(0f);
+        makeStructuralContainersTransparent(container, context);
+        makeShortcutRowsTransparent(container, context, compact, visualComfort);
+    }
+
+    /** A short opening-only guard for Oplus's deferred structural background restoration. */
+    private static final class PopupMaterialGuard implements ViewTreeObserver.OnPreDrawListener {
+        private final WeakReference<ViewGroup> containerReference;
+        private final ViewTreeObserver observer;
+        private final Context context;
+        private final boolean compact;
+        private final boolean visualComfort;
+        private long expiresAtMs;
+
+        PopupMaterialGuard(
+                ViewGroup container,
+                ViewTreeObserver observer,
+                Context context,
+                boolean compact,
+                boolean visualComfort) {
+            this.containerReference = new WeakReference<>(container);
+            this.observer = observer;
+            this.context = context;
+            this.compact = compact;
+            this.visualComfort = visualComfort;
+            arm();
+        }
+
+        void attach() {
+            if (observer.isAlive()) observer.addOnPreDrawListener(this);
+        }
+
+        void arm() {
+            expiresAtMs = SystemClock.uptimeMillis() + MATERIAL_GUARD_DURATION_MS;
+        }
+
+        void detach() {
+            if (observer.isAlive()) observer.removeOnPreDrawListener(this);
+        }
+
+        @Override
+        public boolean onPreDraw() {
+            ViewGroup container = containerReference.get();
+            if (container == null) {
+                detach();
+                return true;
+            }
+            try {
+                if (container.isAttachedToWindow()) {
+                    reapplyPopupMaterialFrame(container, context, compact, visualComfort);
+                }
+            } catch (Throwable error) {
+                Log.w(TAG, "Unable to guard popup material before draw", error);
+            }
+            if (SystemClock.uptimeMillis() >= expiresAtMs || !container.isAttachedToWindow()) {
+                if (MATERIAL_PRE_DRAW_GUARDS.get(container) == this) {
+                    MATERIAL_PRE_DRAW_GUARDS.remove(container);
+                }
+                detach();
+            }
+            return true;
         }
     }
 
@@ -673,8 +867,11 @@ public final class LauncherSloganModule extends XposedModule {
         if (context == null) {
             return;
         }
+        boolean translucent = MenuMaterialSettings.readPanel(context);
+        boolean compact = MenuMaterialSettings.readCompact(context);
+        boolean visualComfort = compact && MenuMaterialSettings.readVisualComfort(context);
         preparePopupBackdrop(popup);
-        applyPanelBackground(popup, MenuMaterialSettings.readPanel(context));
+        applyPanelBackground(popup, translucent, compact, visualComfort);
     }
 
     private static void preparePopupBackdrop(Object popup) {
@@ -692,12 +889,17 @@ public final class LauncherSloganModule extends XposedModule {
         disablePopupBackdrop(popup);
     }
 
-    private static void makeShortcutRowsTransparent(ViewGroup outer, Context context) {
+    private static void makeShortcutRowsTransparent(
+            ViewGroup outer, Context context, boolean compact, boolean visualComfort) {
         int textId = context.getResources().getIdentifier("bubble_text", "id", LAUNCHER_PACKAGE);
-        View firstNativeRow = MenuMaterialSettings.readCompact(context)
-                && MenuMaterialSettings.readVisualComfort(context)
-                ? findFirstNativeRow(outer, context) : null;
-        int firstNativeTopInset = compactNativeGroupOverlap(firstNativeRow);
+        View firstNativeRow = findFirstNativeRow(outer, context);
+        int firstNativeTopInset = 0;
+        if (compact && visualComfort) {
+            firstNativeTopInset = compactNativeGroupOverlap(firstNativeRow);
+        } else if (!compact && firstNativeRow != null
+                && outer.findViewWithTag(ROW_TAG) != null) {
+            firstNativeTopInset = normalSloganBoundaryReserve(firstNativeRow, context);
+        }
         makeShortcutRowsTransparent(outer, textId, firstNativeRow, firstNativeTopInset);
     }
 
@@ -730,20 +932,28 @@ public final class LauncherSloganModule extends XposedModule {
     }
 
     private static void applyShortcutRowRipple(View row, int topInset) {
-        // A null content and mask create an unbounded ripple that spills across sibling rows.
-        // ColorOS also ignores a transparent-content ripple without an opaque mask. The inset
-        // on the comfort mode's first native row excludes its layout overlap with the slogan;
-        // that overlap is intentionally visual-only and must not react as part of the option.
+        // Keep the row's background fully transparent. ColorOS row selectors are opaque on some
+        // firmware builds and repaint as long rectangles after popup measurement. Put the ripple
+        // in the foreground instead, where it has no idle fill and cannot create a white block.
         if (!ORIGINAL_ROW_BACKGROUNDS.containsKey(row)) {
             ORIGINAL_ROW_BACKGROUNDS.put(row, row.getBackground());
         }
-        Drawable mask = topInset > 0
-                ? new InsetDrawable(new ColorDrawable(Color.WHITE), 0, topInset, 0, 0)
-                : new ColorDrawable(Color.WHITE);
-        row.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(Color.argb(52, 47, 116, 200)),
-                new ColorDrawable(Color.TRANSPARENT),
-                mask));
+        if (!ORIGINAL_ROW_FOREGROUNDS.containsKey(row)) {
+            ORIGINAL_ROW_FOREGROUNDS.put(row, row.getForeground());
+        }
+        row.setBackgroundColor(Color.TRANSPARENT);
+        int boundedTopInset = Math.max(0, topInset);
+        Drawable ripple = APPLIED_ROW_FOREGROUNDS.get(row);
+        Integer appliedTopInset = APPLIED_ROW_RIPPLE_TOP_INSETS.get(row);
+        if (ripple == null || appliedTopInset == null || appliedTopInset != boundedTopInset) {
+            Drawable mask = new InsetDrawable(new ColorDrawable(Color.WHITE),
+                    0, boundedTopInset, 0, 0);
+            ripple = new RippleDrawable(
+                    ColorStateList.valueOf(Color.argb(48, 255, 255, 255)), null, mask);
+            APPLIED_ROW_FOREGROUNDS.put(row, ripple);
+            APPLIED_ROW_RIPPLE_TOP_INSETS.put(row, boundedTopInset);
+        }
+        if (row.getForeground() != ripple) row.setForeground(ripple);
     }
 
     private static boolean isShortcutRow(View view, int textId) {
