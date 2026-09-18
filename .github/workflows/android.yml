@@ -77,7 +77,7 @@ jobs:
             exit 1
           fi
           "$build_tools/aapt" dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
-          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.6.2'"
+          "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='0.6.3'"
 
       - name: Rename release APK
         if: startsWith(github.ref, 'refs/tags/v')
@@ -111,6 +111,7 @@ jobs:
           body: |
             ## 改进
 
+            - 优化菜单行按压反馈颜色，使用更容易辨认的淡蓝色按压方块，保持空闲状态透明。
             - 修复议题 [#1](https://github.com/TheKingBucket001/Lauso/issues/1)：修正 ColorOS Launcher 长按菜单半透明背景中不完整的矩形白底。
             - 修复半透明菜单开闭动画阴影过重的问题，移除内层面板与结构容器的重复阴影。
             - 保留菜单行按压反馈边界，并在菜单关闭后恢复原生材质状态。

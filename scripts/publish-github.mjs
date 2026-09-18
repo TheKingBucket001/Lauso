@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const owner = process.env.GITHUB_OWNER || 'TheKingBucket001';
 const repo = process.env.GITHUB_REPOSITORY_NAME || 'Lauso';
-const releaseVersion = process.env.RELEASE_VERSION || '0.6.2';
+const releaseVersion = process.env.RELEASE_VERSION || '0.6.3';
 const releaseTag = `v${releaseVersion}`;
 const fullRepo = `${owner}/${repo}`;
 let token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;

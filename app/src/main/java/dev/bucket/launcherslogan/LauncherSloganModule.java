@@ -139,6 +139,12 @@ public final class LauncherSloganModule extends XposedModule {
     private static final int IPHONE_PANEL_FILL_ALPHA_LOW = 234;
     private static final int IPHONE_PANEL_BORDER_ALPHA = 176;
     private static final int IPHONE_PANEL_BORDER_DP = 2;
+    // White-on-white feedback is almost invisible on the translucent white panel. A pale blue
+    // tint keeps the pressed rectangle readable without the heavy gray-blue look of a dark tint.
+    private static final int IPHONE_ROW_RIPPLE_ALPHA = 96;
+    private static final int IPHONE_ROW_RIPPLE_RED = 150;
+    private static final int IPHONE_ROW_RIPPLE_GREEN = 202;
+    private static final int IPHONE_ROW_RIPPLE_BLUE = 240;
     // Oplus can restore its native structural drawable while it finishes opening the popup.
     // Guard only the opening window; a permanent listener would put work on every Launcher frame.
     private static final long MATERIAL_GUARD_DURATION_MS = 220L;
@@ -949,7 +955,13 @@ public final class LauncherSloganModule extends XposedModule {
             Drawable mask = new InsetDrawable(new ColorDrawable(Color.WHITE),
                     0, boundedTopInset, 0, 0);
             ripple = new RippleDrawable(
-                    ColorStateList.valueOf(Color.argb(48, 255, 255, 255)), null, mask);
+                    ColorStateList.valueOf(Color.argb(
+                            IPHONE_ROW_RIPPLE_ALPHA,
+                            IPHONE_ROW_RIPPLE_RED,
+                            IPHONE_ROW_RIPPLE_GREEN,
+                            IPHONE_ROW_RIPPLE_BLUE)),
+                    null,
+                    mask);
             APPLIED_ROW_FOREGROUNDS.put(row, ripple);
             APPLIED_ROW_RIPPLE_TOP_INSETS.put(row, boundedTopInset);
         }
