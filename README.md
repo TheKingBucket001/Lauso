@@ -11,8 +11,6 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](https://github.com/TheKingBucket001/Lauso/blob/main/LICENSE)
 [![ColorOS](https://img.shields.io/badge/ColorOS-16-1677FF.svg)](https://github.com/TheKingBucket001/Lauso)
 
-[下载模块](https://github.com/TheKingBucket001/Lauso/releases/latest) · [源代码](https://github.com/TheKingBucket001/Lauso) · [问题反馈](https://github.com/TheKingBucket001/Lauso/issues)
-
 </div>
 
 ---
