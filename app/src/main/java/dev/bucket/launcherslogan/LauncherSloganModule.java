@@ -133,6 +133,13 @@ public final class LauncherSloganModule extends XposedModule {
     private static final int SLOGAN_MARKER_INSET_DP = 5;
     private static final int IPHONE_OUTER_VERTICAL_INSET_DP = 2;
     private static final int IPHONE_PANEL_RADIUS_DP = 20;
+    private static final ViewOutlineProvider PANEL_OUTLINE = new ViewOutlineProvider() {
+        @Override
+        public void getOutline(View view, Outline outline) {
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
+                    dp(view.getContext(), IPHONE_PANEL_RADIUS_DP));
+        }
+    };
     // Apple-style glass keeps the background recognizable but mutes busy icon colors enough
     // for the foreground menu to remain legible without a full-screen blur.
     private static final int IPHONE_PANEL_FILL_ALPHA = 246;
@@ -574,7 +581,9 @@ public final class LauncherSloganModule extends XposedModule {
         }
         applyTranslucentPanelBackground(container);
         container.setClipToOutline(true);
-        container.setOutlineProvider(roundOutline(container, IPHONE_PANEL_RADIUS_DP));
+        if (container.getOutlineProvider() != PANEL_OUTLINE) {
+            container.setOutlineProvider(PANEL_OUTLINE);
+        }
         // ArrowPopup already owns the outer 2dp elevation. Adding another elevated inner panel
         // makes its shadow double and expand visibly while ColorOS scales the popup open/closed.
         container.setElevation(0f);
@@ -769,7 +778,9 @@ public final class LauncherSloganModule extends XposedModule {
         if (!ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(container)) return;
         applyTranslucentPanelBackground(container);
         container.setClipToOutline(true);
-        container.setOutlineProvider(roundOutline(container, IPHONE_PANEL_RADIUS_DP));
+        if (container.getOutlineProvider() != PANEL_OUTLINE) {
+            container.setOutlineProvider(PANEL_OUTLINE);
+        }
         container.setElevation(0f);
         makeStructuralContainersTransparent(container, context);
         makeShortcutRowsTransparent(container, context, compact, visualComfort);
@@ -945,16 +956,6 @@ public final class LauncherSloganModule extends XposedModule {
                 || isMenuRowRoot(view, textId);
     }
 
-    private static ViewOutlineProvider roundOutline(final View view, final int radiusDp) {
-        return new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View ignored, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
-                        dp(view.getContext(), radiusDp));
-            }
-        };
-    }
-
     private static void disablePopupBackdrop(Object popup) {
         Object blur = readFieldUnchecked(popup, "mPopBlurView");
         if (blur instanceof View) {
@@ -1112,8 +1113,6 @@ public final class LauncherSloganModule extends XposedModule {
                             layoutHeight + compactTextTopPadding + bottomPadding))
                     + compactPanelTopInset;
             targetHeight = baseHeight;
-            int sloganLastBottom = layout == null || layout.getLineCount() == 0
-                    ? layoutHeight : layout.getLineBottom(layout.getLineCount() - 1);
             int sloganContentTop = topPadding + Math.max(0,
                     (baseHeight - topPadding - bottomPadding - layoutHeight) / 2);
             int nativeContentTop = nativeText.getPaddingTop() + Math.max(0,

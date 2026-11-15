@@ -42,8 +42,8 @@ android {
         applicationId 'dev.bucket.launcherslogan'
         minSdk 26
         targetSdk 36
-        versionCode 8
-        versionName '0.6.4'
+        versionCode 9
+        versionName '0.6.5'
     }
 
     signingConfigs {
@@ -119,5 +119,4 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.12.4'
     implementation 'androidx.compose.animation:animation:1.11.2'
     implementation 'top.yukonga.miuix.kmp:miuix-ui:0.9.3'
-    implementation files('../local-libs/miuix-preference-android-0.9.3.aar')
 }

@@ -34,17 +34,6 @@ LauSo 让应用专属文字自然融入系统桌面的长按菜单：既能保�
   </tr>
 </table>
 
-## 支持范围
-
-| 项目 | 说明 |
-| --- | --- |
-| 已验证系统 | ColorOS 16 / Android 16 |
-| 已验证系统桌面 | `com.android.launcher` 16.4.5 |
-| 框架要求 | LSPosed API 101 或更高版本，设备已获得 Root 权限 |
-| 模块作用域 | 系统桌面：`com.android.launcher` |
-
-不同 ColorOS 版本或系统桌面版本的菜单结构可能变化。未列出的系统版本请先自行验证，并在反馈时附上系统桌面版本。
-
 ## 安装与启用
 
 1. 从 [Release](https://github.com/TheKingBucket001/Lauso/releases/latest) 下载并安装 LauSo。

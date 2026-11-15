@@ -50,6 +50,7 @@ public final class ModuleAudit {
     }
     public static void main(String[] args) throws Exception {
         RuleStoreAudit.main(args);
+        RootCleanupAudit.main(args);
         if (Looper.getMainLooper() == null) Looper.prepareMainLooper();
         Class<?> thread = Class.forName("android.app.ActivityThread");
         java.lang.reflect.Constructor<?> constructor = thread.getDeclaredConstructor();

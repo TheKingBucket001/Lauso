@@ -3,6 +3,8 @@ package dev.bucket.launcherslogan;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -139,16 +141,19 @@ public final class RootAccess {
     }
 
     private static void closeProcess(Process process) throws InterruptedException {
-        if (process.isAlive()) {
-            process.destroyForcibly();
-            process.waitFor(500, TimeUnit.MILLISECONDS);
-        }
         try {
-            process.getInputStream().close();
-            process.getErrorStream().close();
-            process.getOutputStream().close();
-        } catch (java.io.IOException ignored) {
-            // Best-effort cleanup after a root command completes.
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                process.waitFor(500, TimeUnit.MILLISECONDS);
+            }
+        } finally {
+            try (InputStream input = process.getInputStream();
+                 InputStream error = process.getErrorStream();
+                 OutputStream output = process.getOutputStream()) {
+                // Close all three streams even if waiting is interrupted or one close fails.
+            } catch (java.io.IOException ignored) {
+                // Best-effort cleanup after a root command completes.
+            }
         }
     }
 

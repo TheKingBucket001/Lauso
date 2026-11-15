@@ -29,6 +29,7 @@ public final class RuleStore {
     private static final int MAX_TOAST_LENGTH = 120;
     private static final Pattern PACKAGE_PATTERN = Pattern.compile(
             "[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+");
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cntrl}\\r\\n]+");
 
     private RuleStore() {
     }
@@ -127,14 +128,12 @@ public final class RuleStore {
 
     public static boolean isValid(
             String packageName, String title, String subtitle, String toastMessage) {
-        return packageName != null
-                && PACKAGE_PATTERN.matcher(packageName).matches()
-                && title != null
-                && !cleanTitle(title).isEmpty()
-                && cleanTitle(title).length() <= MAX_TITLE_LENGTH
-                && subtitle != null
+        if (packageName == null || !PACKAGE_PATTERN.matcher(packageName).matches()
+                || title == null || subtitle == null || toastMessage == null) return false;
+        String normalizedTitle = cleanTitle(title);
+        return !normalizedTitle.isEmpty()
+                && normalizedTitle.length() <= MAX_TITLE_LENGTH
                 && cleanSubtitle(subtitle).length() <= MAX_SUBTITLE_LENGTH
-                && toastMessage != null
                 && cleanToastMessage(toastMessage).length() <= MAX_TOAST_LENGTH;
     }
 
@@ -152,7 +151,7 @@ public final class RuleStore {
 
     private static String cleanText(String value) {
         if (value == null) return "";
-        return value.replaceAll("[\\p{Cntrl}\\r\\n]+", " ").trim();
+        return CONTROL_CHARACTERS.matcher(value).replaceAll(" ").trim();
     }
 
     public static int maxTitleLength() {

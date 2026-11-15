@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { verifyReleaseTag } from './verify-release-tag.mjs';
 
+if (process.env.GITHUB_ACTIONS === 'true') {
+  throw new Error('Git commits and SSH release tags must be created on the local laptop.');
+}
+
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const owner = process.env.GITHUB_OWNER || 'TheKingBucket001';
 const repo = process.env.GITHUB_REPOSITORY_NAME || 'Lauso';
@@ -64,6 +68,7 @@ for (const name of ['RELEASE_STORE_PASSWORD', 'RELEASE_KEY_ALIAS', 'RELEASE_KEY_
 async function github(path, options = {}) {
   const response = await fetch(`https://api.github.com${path}`, {
     ...options,
+    signal: AbortSignal.timeout(30_000),
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
@@ -145,6 +150,12 @@ async function publishReleaseTag() {
   }));
 }
 
+try {
+  await github(`/repos/${fullRepo}/git/ref/tags/${encodeURIComponent(releaseTag)}`);
+  throw new Error(`${releaseTag} 远端标签已存在；拒绝推送或更新发行 Secrets。`);
+} catch (error) {
+  if (!String(error.message).startsWith('GitHub API 404')) throw error;
+}
 await ensureRepository();
 ensureGitPush();
 const keyBase64 = readFileSync(keyPath).toString('base64');

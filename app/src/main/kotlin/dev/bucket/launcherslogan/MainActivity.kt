@@ -10,6 +10,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -20,20 +22,28 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,21 +51,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
@@ -67,13 +83,13 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.anim.folmeSpring
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,7 +98,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.navigationBarColor = AppPalette.Navigation.toArgb()
+        window.navigationBarColor = AppPalette.Background.toArgb()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
@@ -97,7 +113,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Page { HOME, SETTINGS, EDIT, ABOUT }
+private enum class Page { MAIN, EDIT, ABOUT }
 
 private data class GateState(
     val checking: Boolean = true,
@@ -109,18 +125,21 @@ private data class GateState(
 
 private const val LAUSO_REPOSITORY_URL = "https://github.com/TheKingBucket001/Lauso"
 private const val LAUSO_RELEASE_URL = "https://github.com/TheKingBucket001/Lauso/releases/latest"
+private const val LAUSO_LICENSE_URL = "https://github.com/TheKingBucket001/Lauso/blob/main/LICENSE"
+private val MainPageAnimation = spring(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.5f)
+private val DetailPageAnimation = spring(dampingRatio = 1f, stiffness = 650f,
+    visibilityThreshold = IntOffset(1, 1))
 
-private object AppPalette {
-    val Background = Color(0xFFF4F5F3)
-    val Hero = Color(0xFFDCE1DB)
-    val Surface = Color(0xFFE2E5E1)
-    val Navigation = Color(0xFFF0F1EE)
-    val Primary = Color(0xFF2F74C8)
-    val Ink = Color(0xFF172A42)
-    val Muted = Color(0xFF52657A)
+internal object AppPalette {
+    val Background = Color(0xFFFAF8FF)
+    val Surface = Color(0xFFEEEDF4)
+    val Primary = Color(0xFF465D91)
+    val Ink = Color(0xFF1A1B20)
+    val Muted = Color(0xFF595A5F)
+    val Divider = Color(0xFFDDDCE4)
 }
 
-private object AppIcons {
+internal object AppIcons {
     val Home: ImageVector = ImageVector.Builder(
         name = "Home",
         defaultWidth = 24.dp,
@@ -146,7 +165,7 @@ private object AppIcons {
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
-    ).path(fill = SolidColor(AppPalette.Primary)) {
+    ).path(fill = SolidColor(AppPalette.Primary), pathFillType = PathFillType.EvenOdd) {
         moveTo(9.9f, 3f)
         lineTo(14.1f, 3f)
         lineTo(14.6f, 5.8f)
@@ -172,7 +191,6 @@ private object AppIcons {
         lineTo(7f, 7.2f)
         lineTo(9.4f, 5.8f)
         close()
-    }.path(fill = SolidColor(AppPalette.Surface)) {
         moveTo(12f, 16.1f)
         curveTo(14.3f, 16.1f, 16.1f, 14.3f, 16.1f, 12f)
         curveTo(16.1f, 9.7f, 14.3f, 7.9f, 12f, 7.9f)
@@ -186,10 +204,16 @@ private object AppIcons {
 private fun LauncherSloganApp(activity: MainActivity) {
     var gateState by remember { mutableStateOf(GateState()) }
     var gateRefreshSignal by remember { mutableIntStateOf(0) }
-    var page by remember { mutableStateOf(Page.HOME) }
+    var page by remember { mutableStateOf(Page.MAIN) }
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val navigationScope = rememberCoroutineScope()
+    var navigationJob by remember { mutableStateOf<Job?>(null) }
+    val homeListState = rememberLazyListState()
+    val settingsListState = rememberLazyListState()
     var rules: List<SloganRule> by remember { mutableStateOf(RuleStore.read(activity).toList()) }
     var editing by remember { mutableStateOf<SloganRule?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
     var translucentPanelEnabled by remember { mutableStateOf(MenuMaterialSettings.readPanel(activity)) }
     var compactMenuEnabled by remember { mutableStateOf(MenuMaterialSettings.readCompact(activity)) }
     var visualComfortEnabled by remember {
@@ -238,6 +262,7 @@ private fun LauncherSloganApp(activity: MainActivity) {
     }
 
     fun saveRule(packageName: String, title: String, subtitle: String, toastMessage: String) {
+        if (saving) return
         val cleanPackage = packageName.trim()
         val cleanTitle = RuleStore.cleanTitle(title)
         val cleanSubtitle = RuleStore.cleanSubtitle(subtitle)
@@ -264,7 +289,7 @@ private fun LauncherSloganApp(activity: MainActivity) {
             if (result.granted) {
                 rules = next
                 editing = null
-                page = Page.HOME
+                page = Page.MAIN
                 Toast.makeText(activity, "已保存，点击刷新应用到桌面", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(activity, result.message.ifBlank { "保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
@@ -273,6 +298,7 @@ private fun LauncherSloganApp(activity: MainActivity) {
     }
 
     fun deleteRule(rule: SloganRule) {
+        if (saving) return
         saving = true
         val next = rules.filterNot { it.packageName == rule.packageName }
         activity.lifecycleScope.launch {
@@ -281,7 +307,7 @@ private fun LauncherSloganApp(activity: MainActivity) {
             if (result.granted) {
                 rules = next
                 editing = null
-                page = Page.HOME
+                page = Page.MAIN
                 Toast.makeText(activity, "已删除", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(activity, result.message.ifBlank { "删除失败，请确认 Root" }, Toast.LENGTH_LONG).show()
@@ -345,9 +371,43 @@ private fun LauncherSloganApp(activity: MainActivity) {
         }
     }
 
-    BackHandler(enabled = page != Page.HOME) {
-        page = Page.HOME
-        editing = null
+    fun refreshLauncher() {
+        if (refreshing) return
+        refreshing = true
+        activity.lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { RootAccess.refreshLauncher() }
+                if (result.granted) {
+                    Toast.makeText(activity, "桌面正在热刷新", Toast.LENGTH_SHORT).show()
+                    activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                } else {
+                    Toast.makeText(activity, result.message.ifBlank { "桌面刷新失败" }, Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                refreshing = false
+            }
+        }
+    }
+
+    fun navigateMain(index: Int) {
+        if (index == pagerState.targetPage) return
+        navigationJob?.cancel()
+        navigationJob = navigationScope.launch {
+            pagerState.animateScrollToPage(index, animationSpec = MainPageAnimation)
+        }
+    }
+
+    BackHandler(enabled = page != Page.MAIN || pagerState.currentPage != 0 || pagerState.targetPage != 0) {
+        if (page == Page.EDIT && saving) return@BackHandler
+        if (page == Page.MAIN) {
+            navigateMain(0)
+        } else {
+            page = Page.MAIN
+            editing = null
+        }
     }
 
     if (gateState.checking || !gateState.hookReady || !gateState.rootReady) {
@@ -356,151 +416,168 @@ private fun LauncherSloganApp(activity: MainActivity) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                val direction = if (targetState == Page.SETTINGS) 1 else -1
+                val returning = targetState == Page.MAIN
                 (slideInHorizontally(
-                    animationSpec = folmeSpring(damping = 1f, response = 0.32f),
-                    initialOffsetX = { it / 12 * direction },
-                ) + fadeIn(animationSpec = folmeSpring(damping = 1f, response = 0.28f))) togetherWith
+                    animationSpec = DetailPageAnimation,
+                    initialOffsetX = { if (returning) -it / 4 else it },
+                ) + fadeIn(animationSpec = tween(160))) togetherWith
                         (slideOutHorizontally(
-                            animationSpec = folmeSpring(damping = 1f, response = 0.28f),
-                            targetOffsetX = { -it / 16 * direction },
-                        ) + fadeOut(animationSpec = folmeSpring(damping = 1f, response = 0.22f)))
+                            animationSpec = DetailPageAnimation,
+                            targetOffsetX = { if (returning) it else -it / 4 },
+                        ) + fadeOut(animationSpec = tween(120)))
             },
-            label = "page-transition",
+            modifier = Modifier.fillMaxSize().background(AppPalette.Background),
+            label = "detail-transition",
         ) { targetPage ->
             when (targetPage) {
-        Page.HOME, Page.SETTINGS -> Box(
-            modifier = Modifier.fillMaxSize().background(AppPalette.Background),
-        ) {
-            if (targetPage == Page.HOME) {
-                HomeScreen(
-                    rules = rules,
-                    onRefresh = {
-                        activity.lifecycleScope.launch {
-                            val result = withContext(Dispatchers.IO) { RootAccess.refreshLauncher() }
-                            if (result.granted) {
-                                Toast.makeText(activity, "桌面正在热刷新", Toast.LENGTH_SHORT).show()
-                                activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
-                                    addCategory(Intent.CATEGORY_HOME)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } else {
-                                Toast.makeText(activity, result.message.ifBlank { "桌面刷新失败" }, Toast.LENGTH_LONG).show()
-                            }
+                Page.MAIN -> Box(
+                    modifier = Modifier.fillMaxSize().background(AppPalette.Background),
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        beyondViewportPageCount = 1,
+                        flingBehavior = PagerDefaults.flingBehavior(pagerState,
+                            snapAnimationSpec = MainPageAnimation),
+                    ) { index ->
+                        if (index == 0) {
+                            HomeScreen(
+                                rules = rules,
+                                listState = homeListState,
+                                refreshing = refreshing,
+                                onRefresh = ::refreshLauncher,
+                                onAbout = { page = Page.ABOUT },
+                                onAdd = { openEditor(null) },
+                                onEdit = { openEditor(it) },
+                            )
+                        } else {
+                            SettingsScreen(
+                                listState = settingsListState,
+                                isSaving = settingSaveInFlight,
+                                onAbout = { page = Page.ABOUT },
+                                translucentPanelEnabled = translucentPanelEnabled,
+                                compactMenuEnabled = compactMenuEnabled,
+                                visualComfortEnabled = visualComfortEnabled,
+                                disableBackdropBlurEnabled = disableBackdropBlurEnabled,
+                                menuContentEnabled = menuContentEnabled,
+                                onPanelChange = { savePopupSetting(0, it) },
+                                onCompactChange = { savePopupSetting(1, it) },
+                                onVisualComfortChange = { savePopupSetting(2, it) },
+                                onDisableBackdropChange = { savePopupSetting(3, it) },
+                                onMenuContentChange = ::saveMenuContent,
+                            )
                         }
-                    },
-                    onAbout = { page = Page.ABOUT },
-                    onAdd = { openEditor(null) },
-                    onEdit = { openEditor(it) },
+                    }
+                    FloatingMainNavigationBar(
+                        pagerState = pagerState,
+                        onSelect = ::navigateMain,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .navigationBarsPadding().padding(bottom = 20.dp),
+                    )
+                }
+                Page.EDIT -> EditScreen(
+                    initial = editing,
+                    saving = saving,
+                    onBack = { page = Page.MAIN; editing = null },
+                    onSave = ::saveRule,
+                    onDelete = { editing?.let(::deleteRule) },
                 )
-            } else {
-                SettingsScreen(
-                    translucentPanelEnabled = translucentPanelEnabled,
-                    compactMenuEnabled = compactMenuEnabled,
-                    visualComfortEnabled = visualComfortEnabled,
-                    disableBackdropBlurEnabled = disableBackdropBlurEnabled,
-                    menuContentEnabled = menuContentEnabled,
-                    onPanelChange = { savePopupSetting(0, it) },
-                    onCompactChange = { savePopupSetting(1, it) },
-                    onVisualComfortChange = { savePopupSetting(2, it) },
-                    onDisableBackdropChange = { savePopupSetting(3, it) },
-                    onMenuContentChange = ::saveMenuContent,
-                )
-            }
-            MainNavigationBar(
-                selected = page,
-                onSelect = { page = it },
-            )
-        }
-        Page.EDIT -> EditScreen(
-            initial = editing,
-            saving = saving,
-            onBack = { page = Page.HOME; editing = null },
-            onSave = ::saveRule,
-            onDelete = { editing?.let(::deleteRule) },
-        )
-        Page.ABOUT -> AboutScreen(activity = activity, onBack = { page = Page.HOME })
+                Page.ABOUT -> AboutScreen(activity = activity, onBack = { page = Page.MAIN })
             }
         }
     }
 }
 
 @Composable
+private fun MainPageHeader(
+    title: String,
+    subtitle: String,
+    actions: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = AppPalette.Ink)
+            Text(subtitle, fontSize = 12.sp, lineHeight = 16.sp, color = AppPalette.Muted)
+        }
+        actions()
+    }
+}
+
+@Composable
 private fun HomeScreen(
     rules: List<SloganRule>,
+    listState: LazyListState,
+    refreshing: Boolean,
     onRefresh: () -> Unit,
     onAbout: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (SloganRule) -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppPalette.Background)
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+        modifier = Modifier.fillMaxSize().background(AppPalette.Background)
+            .statusBarsPadding().navigationBarsPadding(),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onRefresh) {
-                    Image(painterResource(R.drawable.ic_refresh), "刷新桌面", Modifier.size(22.dp))
+        Column(Modifier.fillMaxSize()) {
+            MainPageHeader("LauSo", "桌面长按菜单标语") {
+                IconButton(onClick = onRefresh, enabled = !refreshing) {
+                    Image(painterResource(R.drawable.ic_refresh), "刷新桌面", Modifier.size(21.dp),
+                        colorFilter = ColorFilter.tint(AppPalette.Ink))
                 }
-                Text(
-                    "桌面标语菜单",
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                )
                 IconButton(onClick = onAbout) {
-                    Image(painterResource(R.drawable.ic_info), "关于", Modifier.size(22.dp))
+                    Image(painterResource(R.drawable.ic_info), "关于", Modifier.size(21.dp),
+                        colorFilter = ColorFilter.tint(AppPalette.Ink))
                 }
             }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 84.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(rules, key = { it.packageName }) { rule ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        showIndication = true,
-                        onClick = { onEdit(rule) },
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+            if (rules.isEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 128.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+                ) {
+                    Text("还没有标语", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = AppPalette.Ink)
+                    Text("点击右下角添加应用规则", fontSize = 13.sp, color = AppPalette.Muted)
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item(key = "rules-heading") {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("应用规则", Modifier.weight(1f), fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium, color = AppPalette.Muted)
+                            Text("${rules.size} 项", fontSize = 12.sp, color = AppPalette.Muted)
+                        }
+                    }
+                    items(rules, key = { it.packageName }) { rule ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
+                            pressFeedbackType = PressFeedbackType.Sink,
+                            showIndication = true,
+                            onClick = { onEdit(rule) },
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(rule.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis)
-                                if (rule.subtitle.isNotBlank()) {
-                                    Text(
-                                        rule.subtitle,
-                                        modifier = Modifier.padding(top = 3.dp),
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = AppPalette.Muted,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                            Row(Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(rule.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                                        color = AppPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (rule.subtitle.isNotBlank()) {
+                                        Text(rule.subtitle, fontSize = 13.sp, color = AppPalette.Muted,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Text(rule.packageName, fontSize = 11.sp, color = AppPalette.Muted,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Text(
-                                    rule.packageName,
-                                    modifier = Modifier.padding(top = 5.dp),
-                                    style = MiuixTheme.textStyles.body2,
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Text("›", Modifier.padding(start = 12.dp).clearAndSetSemantics {},
+                                    fontSize = 24.sp, color = AppPalette.Muted)
                             }
-                            Text("编辑", modifier = Modifier.padding(start = 12.dp), color = MiuixTheme.colorScheme.primary,
-                                style = MiuixTheme.textStyles.body2)
                         }
                     }
                 }
@@ -508,52 +585,19 @@ private fun HomeScreen(
         }
         FloatingActionButton(
             onClick = onAdd,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 72.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 96.dp),
         ) {
-            Image(painterResource(R.drawable.ic_add), "添加应用", Modifier.size(28.dp))
+            Image(painterResource(R.drawable.ic_add), "添加应用", Modifier.size(26.dp))
         }
     }
 }
 
-@Composable
-private fun BoxScope.MainNavigationBar(
-    selected: Page,
-    onSelect: (Page) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .height(44.dp)
-            .background(AppPalette.Navigation),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = { onSelect(Page.HOME) }, modifier = Modifier.weight(1f)) {
-            Image(
-                imageVector = AppIcons.Home,
-                contentDescription = "首页",
-                modifier = Modifier.size(23.dp),
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                    if (selected == Page.HOME) AppPalette.Primary else AppPalette.Muted,
-                ),
-            )
-        }
-        IconButton(onClick = { onSelect(Page.SETTINGS) }, modifier = Modifier.weight(1f)) {
-            Image(
-                imageVector = AppIcons.Settings,
-                contentDescription = "设置",
-                modifier = Modifier.size(23.dp),
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                    if (selected == Page.SETTINGS) AppPalette.Primary else AppPalette.Muted,
-                ),
-            )
-        }
-    }
-}
 
 @Composable
 private fun SettingsScreen(
+    listState: LazyListState,
+    isSaving: Boolean,
+    onAbout: () -> Unit,
     translucentPanelEnabled: Boolean,
     compactMenuEnabled: Boolean,
     visualComfortEnabled: Boolean,
@@ -565,96 +609,70 @@ private fun SettingsScreen(
     onDisableBackdropChange: (Boolean) -> Unit,
     onMenuContentChange: (String, Boolean) -> Unit,
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(AppPalette.Background)
             .statusBarsPadding()
             .navigationBarsPadding(),
-        contentPadding = PaddingValues(bottom = 84.dp),
     ) {
-        item {
-            Text(
-                "设置",
-                modifier = Modifier.padding(start = 24.dp, top = 14.dp, end = 24.dp, bottom = 8.dp),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = AppPalette.Ink,
-            )
-        }
-        item { SectionTitle("菜单外观") }
-        item {
-            Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-            ) {
-                SettingSwitch(
-                    checked = translucentPanelEnabled,
-                    enabled = true,
-                    onCheckedChange = onPanelChange,
-                    title = "半透明白菜单",
-                    summary = "使用局部磨砂材质，不模糊整个桌面",
-                )
-                SettingsDivider()
-                SettingSwitch(
-                    checked = compactMenuEnabled,
-                    enabled = true,
-                    onCheckedChange = onCompactChange,
-                    title = "紧凑菜单",
-                    summary = "按 iPhone 比例收窄面板、文字和菜单行",
-                )
-                SettingsDivider()
-                SettingSwitch(
-                    checked = visualComfortEnabled,
-                    enabled = compactMenuEnabled,
-                    onCheckedChange = onVisualComfortChange,
-                    title = "视觉舒适",
-                    summary = "仅紧凑菜单开启时可用，缩小标语下方空白约 35%",
-                )
-                SettingsDivider()
-                SettingSwitch(
-                    checked = disableBackdropBlurEnabled,
-                    enabled = true,
-                    onCheckedChange = onDisableBackdropChange,
-                    title = "关闭全屏背景模糊",
-                    summary = "开启后移除系统的全屏背景模糊",
-                )
+        MainPageHeader("设置", "外观与菜单内容") {
+            IconButton(onClick = onAbout) {
+                Image(painterResource(R.drawable.ic_info), "关于", Modifier.size(21.dp),
+                    colorFilter = ColorFilter.tint(AppPalette.Ink))
             }
         }
-        item { SectionTitle("菜单内容") }
-        item {
-            Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-            ) {
-                MenuContentOptions.take(2).forEachIndexed { index, option ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(bottom = 120.dp),
+        ) {
+            item { SectionTitle("菜单外观", topPadding = 4.dp) }
+            item {
+                Card(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
+                ) {
                     SettingSwitch(
-                        checked = menuContentEnabled[option.key] == true,
-                        enabled = true,
-                        onCheckedChange = { onMenuContentChange(option.key, it) },
-                        title = option.title,
-                        summary = option.summary,
+                        checked = translucentPanelEnabled,
+                        enabled = !isSaving,
+                        onCheckedChange = onPanelChange,
+                        title = "半透明白菜单",
+                        summary = "让桌面背景轻透可见",
                     )
-                    if (index < 1) SettingsDivider()
+                    SettingsDivider()
+                    SettingSwitch(
+                        checked = compactMenuEnabled,
+                        enabled = !isSaving,
+                        onCheckedChange = onCompactChange,
+                        title = "紧凑菜单",
+                        summary = "收窄面板、文字和菜单行",
+                    )
+                    SettingsDivider()
+                    SettingSwitch(
+                        checked = visualComfortEnabled,
+                        enabled = compactMenuEnabled && !isSaving,
+                        onCheckedChange = onVisualComfortChange,
+                        title = "视觉舒适",
+                        summary = "紧凑模式下减少空白约 35%",
+                    )
+                    SettingsDivider()
+                    SettingSwitch(
+                        checked = disableBackdropBlurEnabled,
+                        enabled = !isSaving,
+                        onCheckedChange = onDisableBackdropChange,
+                        title = "关闭全屏背景模糊",
+                        summary = "保持桌面背景清晰",
+                    )
                 }
             }
-        }
-        item { SectionTitle("系统菜单项") }
-        item {
-            Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-            ) {
-                MenuContentOptions.drop(2).forEachIndexed { index, option ->
-                    SettingSwitch(
-                        checked = menuContentEnabled[option.key] == true,
-                        enabled = true,
-                        onCheckedChange = { onMenuContentChange(option.key, it) },
-                        title = option.title,
-                        summary = option.summary,
-                    )
-                    if (index < MenuContentOptions.drop(2).lastIndex) SettingsDivider()
-                }
+            item { SectionTitle("菜单内容") }
+            item {
+                MenuContentGroup(MenuContentOptions.take(2), menuContentEnabled, !isSaving, onMenuContentChange)
+            }
+            item { SectionTitle("系统菜单项") }
+            item {
+                MenuContentGroup(MenuContentOptions.drop(2), menuContentEnabled, !isSaving, onMenuContentChange)
             }
         }
     }
@@ -709,6 +727,25 @@ private val MenuContentOptions = listOf(
     ),
 )
 
+@Composable
+private fun MenuContentGroup(
+    options: List<MenuContentOption>,
+    values: Map<String, Boolean>,
+    enabled: Boolean,
+    onChange: (String, Boolean) -> Unit,
+) {
+    Card(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
+    ) {
+        options.forEachIndexed { index, option ->
+            SettingSwitch(values[option.key] == true, enabled, { onChange(option.key, it) },
+                option.title, option.summary)
+            if (index < options.lastIndex) SettingsDivider()
+        }
+    }
+}
+
 /** MIUIX setting row whose label area intentionally has no click handler. */
 @Composable
 private fun SettingSwitch(
@@ -736,7 +773,7 @@ private fun SettingSwitch(
 private fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
-        color = MiuixTheme.colorScheme.dividerLine,
+        color = AppPalette.Divider,
     )
 }
 
@@ -759,7 +796,7 @@ private fun EditScreen(
             .statusBarsPadding().navigationBarsPadding(),
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, enabled = !saving) {
                 Image(painterResource(R.drawable.ic_back), "返回", Modifier.size(22.dp))
             }
             Text(if (initial == null) "添加菜单项" else "编辑菜单项", modifier = Modifier.padding(start = 8.dp), fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -773,6 +810,7 @@ private fun EditScreen(
                 useLabelAsPlaceholder = true,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                enabled = !saving,
             )
             TextField(
                 value = title,
@@ -781,6 +819,7 @@ private fun EditScreen(
                 label = "主标语",
                 useLabelAsPlaceholder = true,
                 singleLine = true,
+                enabled = !saving,
             )
             TextField(
                 value = subtitle,
@@ -789,6 +828,7 @@ private fun EditScreen(
                 label = "副标语（可选）",
                 useLabelAsPlaceholder = true,
                 singleLine = true,
+                enabled = !saving,
             )
             TextField(
                 value = toastMessage,
@@ -797,6 +837,7 @@ private fun EditScreen(
                 label = "点击气泡（可选）",
                 useLabelAsPlaceholder = true,
                 singleLine = true,
+                enabled = !saving,
             )
             Button(onClick = { onSave(packageName, title, subtitle, toastMessage) }, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
                 Text(if (saving) "保存中" else "保存")
@@ -932,95 +973,103 @@ private fun GateRow(title: String, passed: Boolean, summary: String) {
 
 @Composable
 private fun AboutScreen(activity: MainActivity, onBack: () -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(AppPalette.Background)
-            .statusBarsPadding().navigationBarsPadding(),
-        contentPadding = PaddingValues(bottom = 28.dp),
-        userScrollEnabled = false,
+    Column(
+        modifier = Modifier.fillMaxSize().background(AppPalette.Background).safeDrawingPadding(),
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Image(painterResource(R.drawable.ic_back), "返回", Modifier.size(22.dp))
-                }
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text("关于 LauSo", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                }
-                Box(Modifier.size(48.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Image(
+                    painterResource(R.drawable.ic_back),
+                    "返回",
+                    Modifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(AppPalette.Ink),
+                )
             }
+            Text(
+                "关于 LauSo",
+                style = MiuixTheme.textStyles.subtitle,
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                color = AppPalette.Ink,
+            )
+            Spacer(Modifier.width(48.dp))
         }
-        item {
+        Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Card(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Hero),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().background(AppPalette.Surface).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Image(painterResource(R.drawable.ic_brand), "LauSo", Modifier.size(56.dp))
-                    Text("LSPosed 模块", color = AppPalette.Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("LauSo", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = AppPalette.Ink)
+                    Image(painterResource(R.drawable.ic_brand), "LauSo 图标", Modifier.size(64.dp))
+                    Text("系统桌面长按菜单", color = AppPalette.Primary,
+                        fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("LauSo", fontWeight = FontWeight.Bold, fontSize = 26.sp,
+                        color = AppPalette.Ink)
                     Text(
-                        "为桌面图标长按菜单添加自定义主标语、副标语与点击反馈。",
-                        style = MiuixTheme.textStyles.body2,
+                        "为桌面长按菜单添加自定义标语。",
                         color = AppPalette.Muted,
-                        maxLines = 3,
+                        fontSize = 14.sp,
                         lineHeight = 20.sp,
                     )
                 }
             }
-        }
-        item { SectionTitle("模块信息") }
-        item {
             Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
             ) {
-                InfoRow("当前版本", "v${BuildConfig.VERSION_NAME}")
-                InfoDivider()
+                InfoRow("当前版本", BuildConfig.VERSION_NAME)
+                AboutInfoDivider()
                 InfoRow("模块 ID", "LauSo")
-                InfoDivider()
-                InfoRow("维护者", "bucket")
+                AboutInfoDivider()
+                InfoRow("维护者", "Bucket")
             }
-        }
-        item { SectionTitle("项目") }
-        item {
+            AboutSectionTitle("项目")
             Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
             ) {
-                AboutActionRow(
-                    title = "查看源代码",
-                    summary = "GitHub · TheKingBucket001/Lauso",
-                    action = "GitHub",
-                ) { openExternalUrl(activity, LAUSO_REPOSITORY_URL) }
-                InfoDivider()
-                AboutActionRow(
-                    title = "开源许可证",
-                    summary = "GNU General Public License v3.0",
-                    action = "GPL-3.0",
-                    onClick = null,
-                )
+                AboutActionRow("查看源代码", "GitHub · TheKingBucket001/Lauso", "GitHub") {
+                    openExternalUrl(activity, LAUSO_REPOSITORY_URL)
+                }
+                AboutInfoDivider()
+                AboutActionRow("开源许可证", "GNU General Public License v3.0", "GPL-3.0") {
+                    openExternalUrl(activity, LAUSO_LICENSE_URL)
+                }
             }
-        }
-        item { SectionTitle("更新") }
-        item {
+            AboutSectionTitle("更新")
             Card(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
             ) {
-                AboutActionRow(
-                    title = "检查更新",
-                    summary = "打开 LauSo 的 GitHub Release 页面",
-                    action = "打开",
-                ) { openExternalUrl(activity, LAUSO_RELEASE_URL) }
+                AboutActionRow("检查更新", "查看是否有新版本", "检查") {
+                    openExternalUrl(activity, LAUSO_RELEASE_URL)
+                }
             }
         }
     }
+}
+
+@Composable
+private fun AboutSectionTitle(text: String) {
+    Text(text, style = MiuixTheme.textStyles.subtitle, fontWeight = FontWeight.Bold,
+        color = AppPalette.Ink,
+        modifier = Modifier.padding(start = 24.dp, top = 8.dp, bottom = 2.dp))
+}
+
+@Composable
+private fun AboutInfoDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(AppPalette.Divider))
 }
 
 private fun openExternalUrl(activity: MainActivity, url: String) {
@@ -1032,22 +1081,23 @@ private fun openExternalUrl(activity: MainActivity, url: String) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, modifier = Modifier.padding(start = 24.dp, top = 22.dp, bottom = 8.dp),
-        style = MiuixTheme.textStyles.subtitle, fontWeight = FontWeight.Bold, color = AppPalette.Ink)
+private fun SectionTitle(text: String, topPadding: Dp = 16.dp) {
+    Text(text, modifier = Modifier.padding(start = 20.dp, top = topPadding, bottom = 8.dp),
+        fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AppPalette.Muted)
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(0.42f), style = MiuixTheme.textStyles.body2, color = AppPalette.Muted)
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.weight(1f), style = MiuixTheme.textStyles.body1, color = AppPalette.Primary)
         Text(
             value,
-            modifier = Modifier.weight(0.58f).padding(start = 12.dp),
-            style = MiuixTheme.textStyles.body2,
+            modifier = Modifier.weight(1f),
+            style = MiuixTheme.textStyles.body1,
             color = AppPalette.Ink,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
+            fontSize = 14.sp,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.End,
         )
@@ -1068,7 +1118,7 @@ private fun AboutActionRow(
 ) {
     val rowModifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
     Row(
-        modifier = rowModifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp),
+        modifier = rowModifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1076,16 +1126,14 @@ private fun AboutActionRow(
             Text(
                 summary,
                 style = MiuixTheme.textStyles.body2,
-                color = AppPalette.Muted,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                color = AppPalette.Primary,
             )
         }
         Text(
             action,
             modifier = Modifier.padding(start = 12.dp),
             color = AppPalette.Primary,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
         )
     }

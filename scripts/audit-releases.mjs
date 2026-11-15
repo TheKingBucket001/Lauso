@@ -35,7 +35,9 @@ try {
         }
         const head = await api(`/repos/${repository}/branches/main`);
         const readme = await api(`/repos/${repository}/contents/README.md?ref=main`);
-        const report = { repository, head: head.commit.sha, readmeBlob: readme.sha, tags: [], releases: [] };
+        const latest = await api(`/repos/${repository}/releases/latest`);
+        const report = { repository, head: head.commit.sha, readmeBlob: readme.sha,
+            latestTag: latest.tag_name, tags: [], releases: [] };
         for (const ref of refs) {
             const tag = ref.ref.slice('refs/tags/'.length);
             const verified = await verifyReleaseTag({ repository, tag, token, expectedObject: ref.object.sha });
@@ -80,6 +82,13 @@ try {
         evidence.repositories.push(report);
     }
     const [source, mirror] = evidence.repositories;
+    if (source.readmeBlob !== mirror.readmeBlob) throw new Error('Source and mirror README differ.');
+    const latestSource = source.releases.find(release => release.tag === source.latestTag);
+    const latestVersion = latestSource?.assets[0];
+    if (!latestVersion || mirror.latestTag !== `${latestVersion.versionCode}-${latestVersion.versionName}`
+            || !mirror.releases.some(release => release.tag === mirror.latestTag)) {
+        throw new Error('The latest source release has not been published as the latest mirror release.');
+    }
     for (const release of mirror.releases) {
         const original = source.releases.find(item => item.assets[0]?.versionName === release.assets[0]?.versionName);
         if (!original || original.body.trimEnd() !== release.body.trimEnd()

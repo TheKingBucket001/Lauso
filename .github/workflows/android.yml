@@ -22,7 +22,7 @@ jobs:
           node-version: '24'
 
       - name: Test release verification
-        run: node --test scripts/verify-release-tag.test.mjs
+        run: node --test scripts/*.test.mjs
 
       - name: Require a GitHub-verified SSH release tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -140,47 +140,3 @@ jobs:
           body_path: release-notes/${{ github.ref_name }}.md
           files: release/LauSo-${{ github.ref_name }}.apk
           fail_on_unmatched_files: true
-
-  sync-lsposed-repository:
-    needs: publish
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Configure LSPosed repository key
-        env:
-          LSPOSED_SYNC_SSH_KEY: ${{ secrets.LSPOSED_SYNC_SSH_KEY }}
-          LSPOSED_SIGNING_SSH_KEY: ${{ secrets.LSPOSED_SIGNING_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          : "${LSPOSED_SYNC_SSH_KEY:?LSPOSED_SYNC_SSH_KEY is required}"
-          : "${LSPOSED_SIGNING_SSH_KEY:?LSPOSED_SIGNING_SSH_KEY is required}"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$LSPOSED_SYNC_SSH_KEY" > ~/.ssh/lsposed-sync
-          chmod 600 ~/.ssh/lsposed-sync
-          printf '%s\n' "$LSPOSED_SIGNING_SSH_KEY" > ~/.ssh/lsposed-signing
-          chmod 600 ~/.ssh/lsposed-signing
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
-          printf 'Host github.com\n  IdentityFile ~/.ssh/lsposed-sync\n  IdentitiesOnly yes\n' >> ~/.ssh/config
-          {
-            echo "LSPOSED_SYNC_SIGNING_KEY=$HOME/.ssh/lsposed-signing"
-            echo "LSPOSED_SYNC_GPG_SSH_PROGRAM=ssh-keygen"
-          } >> "$GITHUB_ENV"
-
-      - name: Synchronize LSPosed module repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          LSPOSED_PUSH_RELEASE_TAG: 'true'
-          LSPOSED_REPOSITORY_SSH_URL: git@github.com:Xposed-Modules-Repo/dev.bucket.launcherslogan.git
-          LSPOSED_SOURCE_URL: https://github.com/TheKingBucket001/Lauso
-          LSPOSED_DISPLAY_TITLE: LauSo-为 ColorOS Launcher 图标长按菜单添加自定义标语
-        run: node scripts/sync-lsposed-repository.mjs

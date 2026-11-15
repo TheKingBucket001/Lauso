@@ -6,6 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { githubToken, verifyReleaseTag } from './verify-release-tag.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+if (process.env.GITHUB_ACTIONS === 'true') {
+    throw new Error('Repository synchronization and SSH tag signing must run on the local laptop.');
+}
 const targetUrl = process.env.LSPOSED_REPOSITORY_SSH_URL
     || 'git@github.com:Xposed-Modules-Repo/dev.bucket.launcherslogan.git';
 const sourceUrl = process.env.LSPOSED_SOURCE_URL || 'https://github.com/TheKingBucket001/Lauso';
@@ -24,9 +27,8 @@ function readGitConfig(name) {
     }
 }
 
-const signingKey = process.env.LSPOSED_SYNC_SIGNING_KEY || readGitConfig('user.signingkey');
-const signingProgram = process.env.LSPOSED_SYNC_GPG_SSH_PROGRAM
-    || readGitConfig('gpg.ssh.program') || 'ssh-keygen';
+const signingKey = readGitConfig('user.signingkey');
+const signingProgram = readGitConfig('gpg.ssh.program') || 'ssh-keygen';
 const pushReleaseTag = process.env.LSPOSED_PUSH_RELEASE_TAG === 'true';
 if (!signingKey) throw new Error('SSH signing key is required; unsigned sync is not allowed.');
 const targetRepository = /^git@github\.com:([^/]+\/[^/]+?)\.git$/.exec(targetUrl)?.[1];

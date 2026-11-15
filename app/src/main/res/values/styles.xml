@@ -4,9 +4,9 @@
     <style name="ModuleTheme" parent="android:style/Theme.DeviceDefault.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:colorAccent">#2F74C8</item>
-        <item name="android:navigationBarColor">#F0F1EE</item>
-        <item name="android:statusBarColor">#F4F5F3</item>
+        <item name="android:colorAccent">#465D91</item>
+        <item name="android:navigationBarColor">#FAF8FF</item>
+        <item name="android:statusBarColor">#FAF8FF</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>
