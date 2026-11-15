@@ -159,18 +159,20 @@ jobs:
       - name: Configure LSPosed repository key
         env:
           LSPOSED_SYNC_SSH_KEY: ${{ secrets.LSPOSED_SYNC_SSH_KEY }}
+          LSPOSED_SIGNING_SSH_KEY: ${{ secrets.LSPOSED_SIGNING_SSH_KEY }}
         run: |
           set -euo pipefail
           : "${LSPOSED_SYNC_SSH_KEY:?LSPOSED_SYNC_SSH_KEY is required}"
+          : "${LSPOSED_SIGNING_SSH_KEY:?LSPOSED_SIGNING_SSH_KEY is required}"
           install -d -m 700 ~/.ssh
           printf '%s\n' "$LSPOSED_SYNC_SSH_KEY" > ~/.ssh/lsposed-sync
           chmod 600 ~/.ssh/lsposed-sync
-          ssh-keygen -y -f ~/.ssh/lsposed-sync > ~/.ssh/lsposed-sync.pub
-          chmod 644 ~/.ssh/lsposed-sync.pub
+          printf '%s\n' "$LSPOSED_SIGNING_SSH_KEY" > ~/.ssh/lsposed-signing
+          chmod 600 ~/.ssh/lsposed-signing
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts
           printf 'Host github.com\n  IdentityFile ~/.ssh/lsposed-sync\n  IdentitiesOnly yes\n' >> ~/.ssh/config
           {
-            echo "LSPOSED_SYNC_SIGNING_KEY=$HOME/.ssh/lsposed-sync.pub"
+            echo "LSPOSED_SYNC_SIGNING_KEY=$HOME/.ssh/lsposed-signing"
             echo "LSPOSED_SYNC_GPG_SSH_PROGRAM=ssh-keygen"
           } >> "$GITHUB_ENV"
 
