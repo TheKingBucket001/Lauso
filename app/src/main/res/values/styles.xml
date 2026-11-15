@@ -5,8 +5,8 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#2F74C8</item>
-        <item name="android:navigationBarColor">#E8F1FC</item>
-        <item name="android:statusBarColor">#E8F1FC</item>
+        <item name="android:navigationBarColor">#F0F1EE</item>
+        <item name="android:statusBarColor">#F4F5F3</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

@@ -41,7 +41,7 @@ LauSo 让应用专属文字自然融入系统桌面的长按菜单：既能保�
 | 项目 | 说明 |
 | --- | --- |
 | 已验证系统 | ColorOS 16 / Android 16 |
-| 已验证系统桌面 | `com.android.launcher` 16.6.17 |
+| 已验证系统桌面 | `com.android.launcher` 16.4.5 |
 | 框架要求 | LSPosed API 101 或更高版本，设备已获得 Root 权限 |
 | 模块作用域 | 系统桌面：`com.android.launcher` |
 

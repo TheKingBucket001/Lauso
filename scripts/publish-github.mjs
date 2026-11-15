@@ -2,13 +2,36 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, relative, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { verifyReleaseTag } from './verify-release-tag.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const owner = process.env.GITHUB_OWNER || 'TheKingBucket001';
 const repo = process.env.GITHUB_REPOSITORY_NAME || 'Lauso';
-const releaseVersion = process.env.RELEASE_VERSION || '0.6.3';
+const configuredVersion = /versionName\s+'([^']+)'/.exec(
+  readFileSync(resolve(projectRoot, 'app/build.gradle'), 'utf8'),
+)?.[1];
+const releaseVersion = process.env.RELEASE_VERSION || configuredVersion;
+if (!configuredVersion || releaseVersion !== configuredVersion) {
+  throw new Error('发行版本必须与 app/build.gradle 的 versionName 一致。');
+}
 const releaseTag = `v${releaseVersion}`;
 const fullRepo = `${owner}/${repo}`;
+const notes = resolve(projectRoot, 'release-notes', `${releaseTag}.md`);
+if (!existsSync(notes) || !readFileSync(notes, 'utf8').trim()) {
+  throw new Error(`缺少本版本的独立更新说明：release-notes/${releaseTag}.md`);
+}
+if (existsSync(resolve(projectRoot, '.git'))) {
+  let existingTag = false;
+  try {
+    execFileSync('git', ['rev-parse', '--verify', `refs/tags/${releaseTag}`], {
+      cwd: projectRoot, stdio: 'ignore',
+    });
+    existingTag = true;
+  } catch {
+    // A fresh version must not already have a local tag.
+  }
+  if (existingTag) throw new Error(`${releaseTag} 已存在；拒绝修改仓库或发行 Secrets。`);
+}
 let token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 if (!token) {
   try {
@@ -81,7 +104,7 @@ async function ensureRepository() {
   }
 }
 
-function ensureGitPush(repository) {
+function ensureGitPush() {
   if (!existsSync(resolve(projectRoot, '.git'))) git(['init']);
   git(['branch', '-M', 'main']);
   const sshRemote = `git@github.com:${owner}/${repo}.git`;
@@ -93,6 +116,7 @@ function ensureGitPush(repository) {
   git(['config', 'user.signingkey', `${process.env.USERPROFILE}/.ssh/id_ed25519.pub`]);
   git(['config', 'gpg.ssh.program', 'R:/Git/usr/bin/ssh-keygen.exe']);
   git(['config', 'commit.gpgsign', 'true']);
+  git(['config', 'tag.gpgSign', 'true']);
   git(['add', '-A']);
   try { git(['diff', '--cached', '--quiet']); }
   catch { git(['commit', '-m', `发布 LauSo ${releaseTag}`]); }
@@ -107,23 +131,26 @@ function setSecret(name, value) {
   });
 }
 
-function publishReleaseTag() {
-  try {
-    execFileSync('git', ['rev-parse', '--verify', `refs/tags/${releaseTag}`], { cwd: projectRoot, stdio: 'ignore' });
-    throw new Error(`本地 ${releaseTag} 标签已经存在；为避免覆盖发行历史，脚本停止。`);
-  } catch (error) {
-    if (error.message.includes(`本地 ${releaseTag}`)) throw error;
-  }
+async function publishReleaseTag() {
   git(['tag', '-s', releaseTag, '-m', `LauSo ${releaseTag}`]);
   git(['push', 'origin', releaseTag]);
+  const expectedObject = execFileSync('git', ['rev-parse', releaseTag], {
+    cwd: projectRoot, encoding: 'utf8',
+  }).trim();
+  const expectedCommit = execFileSync('git', ['rev-parse', `${releaseTag}^{}`], {
+    cwd: projectRoot, encoding: 'utf8',
+  }).trim();
+  console.log(await verifyReleaseTag({
+    repository: fullRepo, tag: releaseTag, token, expectedObject, expectedCommit,
+  }));
 }
 
-const repository = await ensureRepository();
-ensureGitPush(repository);
+await ensureRepository();
+ensureGitPush();
 const keyBase64 = readFileSync(keyPath).toString('base64');
 setSecret('RELEASE_KEYSTORE_BASE64', keyBase64);
 setSecret('RELEASE_STORE_PASSWORD', properties.RELEASE_STORE_PASSWORD);
 setSecret('RELEASE_KEY_ALIAS', properties.RELEASE_KEY_ALIAS);
 setSecret('RELEASE_KEY_PASSWORD', properties.RELEASE_KEY_PASSWORD);
-publishReleaseTag();
+await publishReleaseTag();
 console.log(`已推送 ${fullRepo}，并更新 RELEASE_* Secrets。`);

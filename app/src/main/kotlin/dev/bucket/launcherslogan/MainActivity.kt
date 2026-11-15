@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.res.painterResource
@@ -81,7 +82,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.navigationBarColor = android.graphics.Color.rgb(224, 235, 247)
+        window.navigationBarColor = AppPalette.Navigation.toArgb()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
@@ -110,10 +111,10 @@ private const val LAUSO_REPOSITORY_URL = "https://github.com/TheKingBucket001/La
 private const val LAUSO_RELEASE_URL = "https://github.com/TheKingBucket001/Lauso/releases/latest"
 
 private object AppPalette {
-    val Background = Color(0xFFE8F1FC)
-    val Hero = Color(0xFFDCEBFC)
-    val Surface = Hero
-    val Navigation = Color(0xFFE0EBF7)
+    val Background = Color(0xFFF4F5F3)
+    val Hero = Color(0xFFDCE1DB)
+    val Surface = Color(0xFFE2E5E1)
+    val Navigation = Color(0xFFF0F1EE)
     val Primary = Color(0xFF2F74C8)
     val Ink = Color(0xFF172A42)
     val Muted = Color(0xFF52657A)

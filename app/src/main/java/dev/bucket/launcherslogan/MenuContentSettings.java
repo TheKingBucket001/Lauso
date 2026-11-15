@@ -33,10 +33,6 @@ public final class MenuContentSettings {
         }
     }
 
-    public static boolean hidesSystemItem(Context context, String option) {
-        return read(context, option);
-    }
-
     public static String keyFor(String option) {
         if (!isKnown(option)) {
             throw new IllegalArgumentException("Unknown menu option");

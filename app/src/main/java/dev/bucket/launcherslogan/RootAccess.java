@@ -23,22 +23,7 @@ public final class RootAccess {
     }
 
     public static Result check() {
-        String lastError = "无法找到可用的 su";
-        for (String suCommand : SU_COMMANDS) {
-            try {
-                return checkWith(suCommand);
-            } catch (java.io.IOException error) {
-                if (isMissingExecutable(suCommand)) {
-                    lastError = "无法找到可用的 su";
-                    continue;
-                }
-                return new Result(false, "无法调用 su", -1);
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                return new Result(false, "Root 检测被中断", -1);
-            }
-        }
-        return new Result(false, lastError, -1);
+        return runWithSu("id", true);
     }
 
     public static Result saveRules(List<SloganRule> rules) {
@@ -89,50 +74,42 @@ public final class RootAccess {
                 + MenuContentSettings.encode(enabled));
     }
 
-    private static Result checkWith(String suCommand) throws java.io.IOException, InterruptedException {
-        Process process = start(suCommand, "id");
-        try {
-            if (!process.waitFor(4, TimeUnit.SECONDS)) {
-                return new Result(false, "Root 授权请求超时", -1);
-            }
-            String output = readOutput(process);
-            if (process.exitValue() == 0 && ROOT_ID.matcher(output).find()) {
-                return new Result(true, "已获得 uid=0", 0);
-            }
-            return new Result(false, process.exitValue() == 0
-                    ? "su 返回的身份不是 uid=0" : "Root 请求被拒绝", process.exitValue());
-        } finally {
-            closeProcess(process);
-        }
+    private static Result runWithSu(String command) {
+        return runWithSu(command, false);
     }
 
-    private static Result runWithSu(String command) {
-        String lastMessage = "无法找到可用的 su";
+    private static Result runWithSu(String command, boolean verifyIdentity) {
         for (String suCommand : SU_COMMANDS) {
             try {
                 Process process = start(suCommand, command);
                 try {
                     if (!process.waitFor(4, TimeUnit.SECONDS)) {
-                        return new Result(false, "Root 命令超时", -1);
+                        return new Result(false, verifyIdentity ? "Root 授权请求超时" : "Root 命令超时", -1);
                     }
                     String output = readOutput(process).trim();
                     int exitCode = process.exitValue();
+                    if (verifyIdentity) {
+                        if (exitCode == 0 && ROOT_ID.matcher(output).find()) {
+                            return new Result(true, "已获得 uid=0", 0);
+                        }
+                        return new Result(false, exitCode == 0
+                                ? "su 返回的身份不是 uid=0" : "Root 请求被拒绝", exitCode);
+                    }
                     return new Result(exitCode == 0, output, exitCode);
                 } finally {
                     closeProcess(process);
                 }
             } catch (java.io.IOException error) {
                 if (isMissingExecutable(suCommand)) {
-                    lastMessage = "无法找到可用的 su";
                     continue;
                 }
                 return new Result(false, "无法调用 su", -1);
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
-                return new Result(false, "Root 命令被中断", -1);
+                return new Result(false, verifyIdentity ? "Root 检测被中断" : "Root 命令被中断", -1);
             }
         }
-        return new Result(false, lastMessage, -1);
+        return new Result(false, "无法找到可用的 su", -1);
     }
 
     private static Process start(String suCommand, String command) throws java.io.IOException {

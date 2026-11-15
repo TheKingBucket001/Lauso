@@ -22,41 +22,29 @@ public final class MenuMaterialSettings {
 
     /** All optional visual changes are off until the user explicitly enables them. */
     public static boolean readPanel(Context context) {
-        try {
-            String value = Settings.Global.getString(context.getContentResolver(), GLOBAL_KEY);
-            return TRANSLUCENT.equals(value) || LEGACY_ACRYLIC.equals(value);
-        } catch (Throwable ignored) {
-            return false;
-        }
+        String value = read(context, GLOBAL_KEY);
+        return TRANSLUCENT.equals(value) || LEGACY_ACRYLIC.equals(value);
     }
 
     public static boolean readCompact(Context context) {
-        try {
-            return ENABLED.equals(Settings.Global.getString(
-                    context.getContentResolver(), COMPACT_KEY));
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return ENABLED.equals(read(context, COMPACT_KEY));
     }
 
     /** True when the compact slogan should use the reduced optical bottom gap. */
     public static boolean readVisualComfort(Context context) {
-        try {
-            return ENABLED.equals(Settings.Global.getString(
-                    context.getContentResolver(), VISUAL_COMFORT_KEY));
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return ENABLED.equals(read(context, VISUAL_COMFORT_KEY));
     }
 
     /** True only when the user has chosen to remove ColorOS's native full-screen blur. */
     public static boolean readDisableBackdrop(Context context) {
+        return ENABLED.equals(read(context, DISABLE_BACKDROP_KEY));
+    }
+
+    private static String read(Context context, String key) {
         try {
-            String value = Settings.Global.getString(
-                    context.getContentResolver(), DISABLE_BACKDROP_KEY);
-            return ENABLED.equals(value);
+            return Settings.Global.getString(context.getContentResolver(), key);
         } catch (Throwable ignored) {
-            return false;
+            return null;
         }
     }
 

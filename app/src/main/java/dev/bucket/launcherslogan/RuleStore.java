@@ -55,11 +55,14 @@ public final class RuleStore {
     public static String encode(List<SloganRule> rules) {
         JSONArray array = new JSONArray();
         ArrayList<SloganRule> ordered = new ArrayList<>();
-        if (rules != null) ordered.addAll(rules);
+        if (rules != null) {
+            for (SloganRule rule : rules) {
+                if (rule != null) ordered.add(rule);
+            }
+        }
         ordered.sort(Comparator.comparing(SloganRule::getPackageName));
         for (SloganRule rule : ordered) {
             if (array.length() >= MAX_RULES) break;
-            if (rule == null) continue;
             JSONObject item = new JSONObject();
             try {
                 item.put("packageName", rule.getPackageName());

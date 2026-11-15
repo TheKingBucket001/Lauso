@@ -310,7 +310,7 @@ public final class LauncherSloganModule extends XposedModule {
             Method isEnabled = shortcutClass.getDeclaredMethod("isEnabled");
             hook(isEnabled).intercept(chain -> {
                 Context context = shortcutContext(chain.getThisObject());
-                if (context != null && MenuContentSettings.hidesSystemItem(context, option)) {
+                if (context != null && MenuContentSettings.read(context, option)) {
                     return false;
                 }
                 return chain.proceed();
@@ -564,7 +564,6 @@ public final class LauncherSloganModule extends XposedModule {
         if (!translucent) {
             removePopupMaterialGuard(container);
             restorePanelBackground(container);
-            clearPanelBackgroundState(container);
             return;
         }
         if (!ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(container)) {
@@ -612,26 +611,27 @@ public final class LauncherSloganModule extends XposedModule {
         }
     }
 
-    private static void restorePanelBackground(View container) {
-        if (ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(container)) {
-            container.setBackground(ORIGINAL_CONTAINER_BACKGROUNDS.get(container));
-            container.setElevation(ORIGINAL_CONTAINER_ELEVATIONS.getOrDefault(container, 0f));
-            container.setClipToOutline(ORIGINAL_CONTAINER_CLIP.getOrDefault(container, false));
-            container.setOutlineProvider(ORIGINAL_CONTAINER_OUTLINES.get(container));
-        }
-        if (container instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) container;
-            restoreStructuralContainerBackgrounds(group);
-            restoreShortcutRows(group);
-        }
-    }
-
     /**
-     * Drops all references captured while one popup was materialized. Drawable callbacks and
-     * outline providers can point back to their View, so relying on WeakHashMap keys alone does
-     * not make these entries collectible. The close animation is the popup lifecycle boundary.
+     * Restores and releases saved state in one tree walk. Drawable callbacks and outline
+     * providers can point back to their View, so weak keys alone do not release that state.
      */
-    private static void clearPanelBackgroundState(View view) {
+    private static void restorePanelBackground(View view) {
+        if (ORIGINAL_CONTAINER_BACKGROUNDS.containsKey(view)) {
+            view.setBackground(ORIGINAL_CONTAINER_BACKGROUNDS.get(view));
+            view.setElevation(ORIGINAL_CONTAINER_ELEVATIONS.getOrDefault(view, 0f));
+            view.setClipToOutline(ORIGINAL_CONTAINER_CLIP.getOrDefault(view, false));
+            view.setOutlineProvider(ORIGINAL_CONTAINER_OUTLINES.get(view));
+        }
+        if (ORIGINAL_STRUCTURAL_BACKGROUNDS.containsKey(view)) {
+            view.setBackground(ORIGINAL_STRUCTURAL_BACKGROUNDS.get(view));
+        }
+        if (ORIGINAL_STRUCTURAL_ELEVATIONS.containsKey(view)) {
+            view.setElevation(ORIGINAL_STRUCTURAL_ELEVATIONS.get(view));
+        }
+        if (ORIGINAL_ROW_BACKGROUNDS.containsKey(view)) {
+            view.setBackground(ORIGINAL_ROW_BACKGROUNDS.get(view));
+            view.setForeground(ORIGINAL_ROW_FOREGROUNDS.get(view));
+        }
         ORIGINAL_CONTAINER_BACKGROUNDS.remove(view);
         ORIGINAL_CONTAINER_ELEVATIONS.remove(view);
         ORIGINAL_CONTAINER_CLIP.remove(view);
@@ -646,7 +646,7 @@ public final class LauncherSloganModule extends XposedModule {
         if (!(view instanceof ViewGroup)) return;
         ViewGroup group = (ViewGroup) view;
         for (int index = 0; index < group.getChildCount(); index++) {
-            clearPanelBackgroundState(group.getChildAt(index));
+            restorePanelBackground(group.getChildAt(index));
         }
     }
 
@@ -683,24 +683,10 @@ public final class LauncherSloganModule extends XposedModule {
             View container = (View) value;
             removePopupMaterialGuard(container);
             restorePanelBackground(container);
-            clearPanelBackgroundState(container);
         }
         restorePopupBackdrop(popup);
         ORIGINAL_BLUR_ALPHA.remove(popup);
         ORIGINAL_ADD_BLUR.remove(popup);
-    }
-
-    private static void restoreShortcutRows(ViewGroup group) {
-        int textId = group.getContext().getResources().getIdentifier(
-                "bubble_text", "id", LAUNCHER_PACKAGE);
-        if (isShortcutRow(group, textId) && ORIGINAL_ROW_BACKGROUNDS.containsKey(group)) {
-            group.setBackground(ORIGINAL_ROW_BACKGROUNDS.get(group));
-            group.setForeground(ORIGINAL_ROW_FOREGROUNDS.get(group));
-        }
-        for (int index = 0; index < group.getChildCount(); index++) {
-            View child = group.getChildAt(index);
-            if (child instanceof ViewGroup) restoreShortcutRows((ViewGroup) child);
-        }
     }
 
     private static void makeStructuralContainersTransparent(ViewGroup outer, Context context) {
@@ -745,21 +731,6 @@ public final class LauncherSloganModule extends XposedModule {
         }
         if (Float.compare(group.getElevation(), 0f) != 0) {
             group.setElevation(0f);
-        }
-    }
-
-    private static void restoreStructuralContainerBackgrounds(ViewGroup group) {
-        if (ORIGINAL_STRUCTURAL_BACKGROUNDS.containsKey(group)) {
-            group.setBackground(ORIGINAL_STRUCTURAL_BACKGROUNDS.get(group));
-        }
-        if (ORIGINAL_STRUCTURAL_ELEVATIONS.containsKey(group)) {
-            group.setElevation(ORIGINAL_STRUCTURAL_ELEVATIONS.get(group));
-        }
-        for (int index = 0; index < group.getChildCount(); index++) {
-            View child = group.getChildAt(index);
-            if (child instanceof ViewGroup) {
-                restoreStructuralContainerBackgrounds((ViewGroup) child);
-            }
         }
     }
 
@@ -969,25 +940,9 @@ public final class LauncherSloganModule extends XposedModule {
     }
 
     private static boolean isShortcutRow(View view, int textId) {
-        if (view.getTag() instanceof String && ROW_TAG.equals(view.getTag())) {
-            return true;
-        }
-        String className = view.getClass().getSimpleName();
-        if (className.contains("DeepShortcut")) {
-            return true;
-        }
-        if (!(view instanceof ViewGroup) || textId == 0) {
-            return false;
-        }
-        // System rows on this Launcher are FrameLayout subclasses. Their direct children are
-        // the label, left icon and divider; containers above them do not own bubble_text.
-        ViewGroup group = (ViewGroup) view;
-        for (int index = 0; index < group.getChildCount(); index++) {
-            if (group.getChildAt(index).getId() == textId) {
-                return true;
-            }
-        }
-        return false;
+        return ROW_TAG.equals(view.getTag())
+                || view.getClass().getSimpleName().contains("DeepShortcut")
+                || isMenuRowRoot(view, textId);
     }
 
     private static ViewOutlineProvider roundOutline(final View view, final int radiusDp) {
@@ -1342,15 +1297,8 @@ public final class LauncherSloganModule extends XposedModule {
     }
 
     private static View findLastNativeRow(View view, Context context) {
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int index = group.getChildCount() - 1; index >= 0; index--) {
-                View result = findLastNativeRow(group.getChildAt(index), context);
-                if (result != null) return result;
-            }
-        }
-        int textId = context.getResources().getIdentifier("bubble_text", "id", LAUNCHER_PACKAGE);
-        return !ROW_TAG.equals(view.getTag()) && isMenuRowRoot(view, textId) ? view : null;
+        return findNativeRow(view, context.getResources().getIdentifier(
+                "bubble_text", "id", LAUNCHER_PACKAGE), true);
     }
 
     /** Returns the top of the visible glyphs relative to a Layout, not its line box. */
@@ -1911,15 +1859,23 @@ public final class LauncherSloganModule extends XposedModule {
     }
 
     private static View findFirstNativeRow(View view, Context context) {
-        int textId = context.getResources().getIdentifier("bubble_text", "id", LAUNCHER_PACKAGE);
-        if (!ROW_TAG.equals(view.getTag()) && isMenuRowRoot(view, textId)) return view;
-        if (!(view instanceof ViewGroup)) return null;
-        ViewGroup group = (ViewGroup) view;
-        for (int index = 0; index < group.getChildCount(); index++) {
-            View result = findFirstNativeRow(group.getChildAt(index), context);
-            if (result != null) return result;
+        return findNativeRow(view, context.getResources().getIdentifier(
+                "bubble_text", "id", LAUNCHER_PACKAGE), false);
+    }
+
+    private static View findNativeRow(View view, int textId, boolean fromEnd) {
+        boolean nativeRow = !ROW_TAG.equals(view.getTag()) && isMenuRowRoot(view, textId);
+        if (!fromEnd && nativeRow) return view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            int count = group.getChildCount();
+            for (int offset = 0; offset < count; offset++) {
+                int index = fromEnd ? count - 1 - offset : offset;
+                View result = findNativeRow(group.getChildAt(index), textId, fromEnd);
+                if (result != null) return result;
+            }
         }
-        return null;
+        return nativeRow ? view : null;
     }
 
     /** Gives the dynamic slogan row the exact horizontal anchors of this popup's native rows. */

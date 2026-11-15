@@ -3,11 +3,15 @@ name: Sync LauSo Release
 on:
   push:
     tags:
-      - 'v*'
+      - '[0-9]*-*'
   workflow_dispatch:
     inputs:
       tag:
         description: 'Source release tag to synchronize'
+        required: true
+        type: string
+      target_tag:
+        description: 'Existing SSH-signed VersionCode-VersionName tag'
         required: true
         type: string
 
@@ -20,29 +24,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download source release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify tags and publish the source release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
+          SOURCE_TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.target_tag || github.ref_name }}
         run: |
           set -euo pipefail
           source_repo='TheKingBucket001/Lauso'
+          [[ "$TAG" =~ ^[0-9]+-([0-9]+\.)*[0-9]+$ ]]
+          expected_source_tag="v${TAG#*-}"
+          SOURCE_TAG="${SOURCE_TAG:-$expected_source_tag}"
+          test "$SOURCE_TAG" = "$expected_source_tag"
+          node .github/scripts/verify-release-tag.mjs --repo "$source_repo" --tag "$SOURCE_TAG"
+          node .github/scripts/verify-release-tag.mjs --repo "$GITHUB_REPOSITORY" --tag "$TAG"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "LSPosed release $TAG already exists."
             exit 0
           fi
           mkdir -p release
-          gh release download "$TAG" --repo "$source_repo" --pattern '*.apk' --dir release
-          gh api "repos/$source_repo/releases/tags/$TAG" --jq .body > release-notes.md
+          gh release download "$SOURCE_TAG" --repo "$source_repo" --pattern '*.apk' --dir release
+          gh api "repos/$source_repo/releases/tags/$SOURCE_TAG" --jq .body > release-notes.md
           test -s release-notes.md
-
-      - name: Publish LSPosed release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
+          node .github/scripts/verify-release-tag.mjs --repo "$GITHUB_REPOSITORY" --tag "$TAG"
           gh release create "$TAG" release/*.apk \
             --repo "$GITHUB_REPOSITORY" \
-            --title "LauSo $TAG" \
+            --verify-tag \
+            --title "LauSo $SOURCE_TAG" \
             --notes-file release-notes.md
