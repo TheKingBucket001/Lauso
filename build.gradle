@@ -1,4 +1,49 @@
 plugins {
     id 'com.android.application' version '9.2.1' apply false
+    id 'com.android.library' version '9.2.1' apply false
     id 'org.jetbrains.kotlin.plugin.compose' version '2.4.10' apply false
+}
+
+// Report resolved artifacts so boundary checks inspect actual compiler/runtime inputs.
+tasks.register('writeModuleBoundaryReport') {
+    def variant = providers.gradleProperty('boundaryVariant').orElse('release').get()
+    if (!(variant in ['debug', 'release'])) throw new GradleException('Unsupported boundary variant')
+    def capitalizedVariant = variant.capitalize()
+    dependsOn ":hook:bundle${capitalizedVariant}Aar", ":shared:bundle${capitalizedVariant}Aar"
+    def reportFile = layout.buildDirectory.file('reports/module-boundaries.json')
+    outputs.file(reportFile)
+    outputs.upToDateWhen { false }
+    doLast {
+        def projectsReport = [:]
+        [':app', ':hook', ':shared'].each { projectPath ->
+            def module = project(projectPath)
+            def declared = []
+            ['implementation', 'api', 'compileOnly', 'runtimeOnly'].each { name ->
+                module.configurations.findByName(name)?.dependencies?.each { dependency ->
+                    if (dependency instanceof org.gradle.api.artifacts.ProjectDependency) {
+                        declared.add([configuration: name, projectPath: dependency.path])
+                    }
+                }
+            }
+            def resolved = [:]
+            ["${variant}CompileClasspath", "${variant}RuntimeClasspath"].each { name ->
+                def artifacts = module.configurations.getByName(name).incoming.artifactView {
+                    attributes {
+                        attribute(org.gradle.api.attributes.Attribute.of('artifactType', String), 'android-classes-jar')
+                    }
+                }.artifacts.artifacts
+                resolved[name] = artifacts.collect { artifact ->
+                    def id = artifact.id.componentIdentifier
+                    [file: artifact.file.absolutePath, component: id.displayName,
+                     projectPath: id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier
+                        ? id.projectPath : null]
+                }
+            }
+            projectsReport[projectPath] = [declared: declared, configurations: resolved]
+        }
+        def target = reportFile.get().asFile
+        target.parentFile.mkdirs()
+        target.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(
+                [schemaVersion: 1, variant: variant, projects: projectsReport])) + '\n', 'UTF-8')
+    }
 }

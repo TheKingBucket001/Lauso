@@ -1,12 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { publishLsposedRelease } from './publish-lsposed-release.mjs';
+import { publishLsposedRelease, verifyReleaseCertificate } from './publish-lsposed-release.mjs';
+
+// Public certificate lines from a verified LauSo release, not a test signing key.
+const formalSignature = `Verifies
+Number of signers: 1
+Signer #1 certificate DN: CN=LauSo, OU=TheKingBucket001, O=TheKingBucket001, C=CN
+Signer #1 certificate SHA-256 digest: ff14ab0eb57ec01d1c5092f4326d45b23cc363053b6e210e3382236a58c224e7
+`;
 
 // Tests use injected clients only; no GitHub or device commands run in this process.
 delete process.env.GITHUB_ACTIONS;
 
 function fixture({ existing = false, badDownload = false, badUpload = false, badMetadata = false,
+    wrongCertificate = false,
     unsignedMirror = false, movedMirror = false, wrongNotes = false, changedSource = false,
     historical = false, draft = false, uploadedDraft = false, draftPage = 1 } = {}) {
     const apk = Buffer.from('cloud-built APK fixture');
@@ -31,7 +39,11 @@ function fixture({ existing = false, badDownload = false, badUpload = false, bad
             return { tagObject: 'signed-tag-object', commit: 'signed-commit' };
         },
         download: async () => badDownload ? Buffer.from('corrupt download') : apk,
-        inspectApk: async () => { if (badMetadata) throw new Error('APK metadata mismatch.'); },
+        inspectApk: async () => {
+            if (badMetadata) throw new Error('APK metadata mismatch.');
+            verifyReleaseCertificate(wrongCertificate
+                ? formalSignature.replace(/digest: [a-f0-9]{64}/, `digest: ${'0'.repeat(64)}`) : formalSignature);
+        },
         upload: async () => {
             uploads++;
             const uploaded = badUpload ? { ...asset, digest: 'wrong digest' } : asset;
@@ -112,6 +124,7 @@ for (const [label, change] of [
     ['unsigned mirror tag', { unsignedMirror: true }],
     ['corrupt downloaded APK', { badDownload: true }],
     ['APK package/version mismatch', { badMetadata: true }],
+    ['an APK signed with a different non-debug certificate', { wrongCertificate: true }],
     ['different existing release notes', { existing: true, wrongNotes: true }],
     ['different existing draft notes', { draft: true, wrongNotes: true }],
 ]) {
@@ -122,6 +135,21 @@ for (const [label, change] of [
         assert.equal(f.uploads(), 0);
     });
 }
+
+test('accepts the actual established release certificate with LF or CRLF output', () => {
+    const certificate = 'ff14ab0eb57ec01d1c5092f4326d45b23cc363053b6e210e3382236a58c224e7';
+    assert.equal(verifyReleaseCertificate(formalSignature), certificate);
+    assert.equal(verifyReleaseCertificate(formalSignature.replaceAll('\n', '\r\n')), certificate);
+});
+
+test('rejects missing certificate output even when the signer DN looks correct', () => {
+    assert.throws(() => verifyReleaseCertificate('Signer #1 certificate DN: CN=LauSo'), /signing certificate/);
+});
+
+test('rejects an additional signer even when the first signer is the formal certificate', () => {
+    assert.throws(() => verifyReleaseCertificate(formalSignature
+        + `Signer #2 certificate SHA-256 digest: ${'1'.repeat(64)}\n`), /signing certificate/);
+});
 
 for (const [label, change] of [
     ['an uploaded APK digest mismatch', { badUpload: true }],

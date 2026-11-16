@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,10 +38,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.anim.folmeSpring
 import top.yukonga.miuix.kmp.basic.Text
 
@@ -66,10 +63,10 @@ internal fun FloatingMainNavigationBar(
     ) {
         val tabWidth = maxWidth / tabs.size
         Box(
-            Modifier.offset {
+            Modifier.graphicsLayer {
                 val position = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
                     .coerceIn(0f, tabs.lastIndex.toFloat())
-                IntOffset((position * tabWidth.toPx()).roundToInt(), 0)
+                translationX = position * tabWidth.toPx()
             }.width(tabWidth).fillMaxHeight().background(Color(0xFFDCE3F7), CircleShape),
         )
         Row(Modifier.fillMaxSize().selectableGroup()) {
@@ -93,7 +90,7 @@ internal fun FloatingMainNavigationBar(
                     Image(icon, contentDescription = null, modifier = Modifier.size(22.dp),
                         colorFilter = ColorFilter.tint(color))
                     Text(label, color = color, fontSize = 11.sp, lineHeight = 14.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1)
                 }
             }

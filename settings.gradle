@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = 'LauncherSlogan'
-include ':app'
+include ':app', ':hook', ':shared'

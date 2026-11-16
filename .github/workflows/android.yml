@@ -37,6 +37,9 @@ jobs:
           distribution: zulu
           java-version: '17'
 
+      - name: Check text input boundaries
+        run: node scripts/test-ui-host.mjs
+
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -44,12 +47,17 @@ jobs:
       - name: Install Android platform
         run: sdkmanager 'platforms;android-37.0' 'build-tools;35.0.0'
 
+      - name: Check Root process timeouts and cleanup
+        run: node scripts/test-root-host.mjs "$ANDROID_HOME"
+
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: Build and lint non-release change
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: ./gradlew :app:assembleDebug :app:lintDebug --no-daemon
+        run: |
+          ./gradlew :app:assembleDebug :app:lintDebug writeModuleBoundaryReport -PboundaryVariant=debug --no-daemon
+          node scripts/verify-module-boundaries.mjs --report build/reports/module-boundaries.json --hook-aar hook/build/outputs/aar/hook-debug.aar --apk app/build/outputs/apk/debug/app-debug.apk
 
       - name: Restore formal release signing configuration
         if: startsWith(github.ref, 'refs/tags/v')
@@ -74,7 +82,18 @@ jobs:
 
       - name: Build and lint formal release
         if: startsWith(github.ref, 'refs/tags/v')
-        run: ./gradlew :app:checkReleaseSigning :app:assembleRelease :app:lintRelease --no-daemon
+        run: |
+          ./gradlew :app:checkReleaseSigning :app:assembleRelease :app:lintRelease :hook:lintRelease :shared:lintRelease writeModuleBoundaryReport --no-daemon
+          node scripts/verify-module-boundaries.mjs --report build/reports/module-boundaries.json --hook-aar hook/build/outputs/aar/hook-release.aar --apk app/build/outputs/apk/release/app-release.apk
+
+      - name: Set up JVM for Compose interaction checks
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Check card press and scroll cancellation
+        run: node scripts/test-press-host.mjs "$ANDROID_HOME"
 
       - name: Verify formal APK signature and metadata
         if: startsWith(github.ref, 'refs/tags/v')
@@ -87,10 +106,8 @@ jobs:
           test -x "$build_tools/aapt"
           certs=$("$build_tools/apksigner" verify --verbose --print-certs "$apk" 2>&1)
           printf '%s\n' "$certs"
-          if printf '%s\n' "$certs" | grep -q 'Android Debug'; then
-            echo 'Release APK is debug-signed.' >&2
-            exit 1
-          fi
+          certificate=$(printf '%s\n' "$certs" | sed -nE 's/^Signer #[0-9]+ certificate SHA-256 digest: ([[:xdigit:]]{64})$/\1/p' | tr '[:upper:]' '[:lower:]')
+          test "$certificate" = 'ff14ab0eb57ec01d1c5092f4326d45b23cc363053b6e210e3382236a58c224e7'
           "$build_tools/aapt" dump badging "$apk" | grep -F "package: name='dev.bucket.launcherslogan'"
           "$build_tools/aapt" dump badging "$apk" | grep -F "versionName='${GITHUB_REF_NAME#v}'"
           version_code=$(sed -nE 's/^ *versionCode ([0-9]+).*$/\1/p' app/build.gradle)

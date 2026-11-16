@@ -3,22 +3,23 @@ package dev.bucket.launcherslogan
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.ViewModelProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -48,10 +50,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -79,6 +81,7 @@ import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -86,49 +89,44 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
+import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
+import top.yukonga.miuix.kmp.utils.overScrollVertical
+import top.yukonga.miuix.kmp.utils.pagerGestureOverride
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.utils.springAnimateToPage
 import top.yukonga.miuix.kmp.window.WindowDialog
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
+@OptIn(ExperimentalFoundationApi::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Keep screen-position compensation when the rebound moves the drag node.
+        ComposeFoundationFlags.isDragNodeOffsetDoubleCountingFixEnabled = false
         window.navigationBarColor = AppPalette.Background.toArgb()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
+        val model = ViewModelProvider(this)[LauncherAppViewModel::class.java]
         setContent {
             val controller = remember {
                 ThemeController(ColorSchemeMode.MonetSystem, keyColor = AppPalette.Primary)
             }
             MiuixTheme(controller = controller) {
-                LauncherSloganApp(this@MainActivity)
+                LauncherSloganApp(this@MainActivity, model)
             }
         }
     }
 }
 
-private enum class Page { MAIN, EDIT, ABOUT }
-
-private data class GateState(
-    val checking: Boolean = true,
-    val hookReady: Boolean = false,
-    val rootReady: Boolean = false,
-    val hookMessage: String = "等待 Launcher 作用域检测完成",
-    val rootMessage: String = "等待 Root 授权检测完成",
-)
-
 private const val LAUSO_REPOSITORY_URL = "https://github.com/TheKingBucket001/Lauso"
 private const val LAUSO_RELEASE_URL = "https://github.com/TheKingBucket001/Lauso/releases/latest"
 private const val LAUSO_LICENSE_URL = "https://github.com/TheKingBucket001/Lauso/blob/main/LICENSE"
-private val MainPageAnimation = spring(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.5f)
-private val DetailPageAnimation = spring(dampingRatio = 1f, stiffness = 650f,
-    visibilityThreshold = IntOffset(1, 1))
+private val PageEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private val DetailPageAnimation = tween<IntOffset>(durationMillis = 260, easing = PageEasing)
+private val ListRefreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新", "刷新完成")
 
 internal object AppPalette {
     val Background = Color(0xFFFAF8FF)
@@ -201,193 +199,27 @@ internal object AppIcons {
 }
 
 @Composable
-private fun LauncherSloganApp(activity: MainActivity) {
-    var gateState by remember { mutableStateOf(GateState()) }
-    var gateRefreshSignal by remember { mutableIntStateOf(0) }
-    var page by remember { mutableStateOf(Page.MAIN) }
+private fun LauncherSloganApp(activity: MainActivity, model: LauncherAppViewModel) {
+    val gateState = model.gateState
+    val page = model.page
     val pagerState = rememberPagerState(pageCount = { 2 })
     val navigationScope = rememberCoroutineScope()
     var navigationJob by remember { mutableStateOf<Job?>(null) }
     val homeListState = rememberLazyListState()
     val settingsListState = rememberLazyListState()
-    var rules: List<SloganRule> by remember { mutableStateOf(RuleStore.read(activity).toList()) }
-    var editing by remember { mutableStateOf<SloganRule?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var refreshing by remember { mutableStateOf(false) }
-    var translucentPanelEnabled by remember { mutableStateOf(MenuMaterialSettings.readPanel(activity)) }
-    var compactMenuEnabled by remember { mutableStateOf(MenuMaterialSettings.readCompact(activity)) }
-    var visualComfortEnabled by remember {
-        mutableStateOf(MenuMaterialSettings.readVisualComfort(activity))
-    }
-    var disableBackdropBlurEnabled by remember {
-        mutableStateOf(MenuMaterialSettings.readDisableBackdrop(activity))
-    }
-    var settingSaveInFlight by remember { mutableStateOf(false) }
-    var menuContentEnabled by remember {
-        mutableStateOf(MenuContentOptions.associate { it.key to MenuContentSettings.read(activity, it.key) })
-    }
+    val rules = model.rules
+    val editing = rules.firstOrNull { it.packageName == model.editingPackageName }
+    val saving = model.busy
 
-    LaunchedEffect(gateRefreshSignal) {
-        gateState = GateState()
-        val rootDeadline = SystemClock.elapsedRealtime() + 4_250L
-        val rootResult = async(Dispatchers.IO) { RootAccess.check() }
-        val hookReady = withContext(Dispatchers.IO) {
-            waitForLauncherVerification(activity)
-        }
-        val root = withTimeoutOrNull(
-            (rootDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
-        ) {
-            rootResult.await()
-        }
-        gateState = GateState(
-            checking = false,
-            hookReady = hookReady,
-            rootReady = root?.granted == true,
-            hookMessage = if (hookReady) {
-                "Launcher 已对本次检查回执"
-            } else {
-                "未收到 Launcher 当前回执。请确认已在 LSPosed 启用 LauSo 的 Launcher 作用域，并重启 Launcher。"
-            },
-            rootMessage = when {
-                root == null -> "Root 授权检测超时，请重新检查"
-                root.granted -> "已获得 uid=0"
-                else -> root.message.ifBlank { "Root 授权未通过" }
-            },
-        )
-    }
-
-    fun openEditor(rule: SloganRule?) {
-        editing = rule
-        page = Page.EDIT
-    }
-
-    fun saveRule(packageName: String, title: String, subtitle: String, toastMessage: String) {
-        if (saving) return
-        val cleanPackage = packageName.trim()
-        val cleanTitle = RuleStore.cleanTitle(title)
-        val cleanSubtitle = RuleStore.cleanSubtitle(subtitle)
-        val cleanToastMessage = RuleStore.cleanToastMessage(toastMessage)
-        if (!RuleStore.isValid(cleanPackage, cleanTitle, cleanSubtitle, cleanToastMessage)) {
-            Toast.makeText(activity, "请输入正确的应用包名和主标语", Toast.LENGTH_SHORT).show()
-            return
-        }
-        saving = true
-        val oldPackage = editing?.packageName
-        val replacesExisting = rules.any { it.packageName == cleanPackage && it.packageName != oldPackage }
-        if (oldPackage == null && !replacesExisting && rules.size >= RuleStore.maxRules()) {
-            saving = false
-            Toast.makeText(activity, "最多保存 ${RuleStore.maxRules()} 条规则", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val next = rules.filterNot { it.packageName == oldPackage || it.packageName == cleanPackage }
-            .toMutableList()
-            .apply { add(SloganRule(cleanPackage, cleanTitle, cleanSubtitle, cleanToastMessage)) }
-            .sortedBy { it.packageName }
-        activity.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { RootAccess.saveRules(next) }
-            saving = false
-            if (result.granted) {
-                rules = next
-                editing = null
-                page = Page.MAIN
-                Toast.makeText(activity, "已保存，点击刷新应用到桌面", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(activity, result.message.ifBlank { "保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun deleteRule(rule: SloganRule) {
-        if (saving) return
-        saving = true
-        val next = rules.filterNot { it.packageName == rule.packageName }
-        activity.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { RootAccess.saveRules(next) }
-            saving = false
-            if (result.granted) {
-                rules = next
-                editing = null
-                page = Page.MAIN
-                Toast.makeText(activity, "已删除", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(activity, result.message.ifBlank { "删除失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun savePopupSetting(kind: Int, enabled: Boolean) {
-        if (settingSaveInFlight) return
-        val previous = when (kind) {
-            0 -> translucentPanelEnabled
-            1 -> compactMenuEnabled
-            2 -> visualComfortEnabled
-            else -> disableBackdropBlurEnabled
-        }
-        when (kind) {
-            0 -> translucentPanelEnabled = enabled
-            1 -> compactMenuEnabled = enabled
-            2 -> visualComfortEnabled = enabled
-            else -> disableBackdropBlurEnabled = enabled
-        }
-        settingSaveInFlight = true
-        activity.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                when (kind) {
-                    0 -> RootAccess.saveMaterial(enabled)
-                    1 -> RootAccess.saveCompact(enabled)
-                    2 -> RootAccess.saveVisualComfort(enabled)
-                    else -> RootAccess.saveDisableBackdrop(enabled)
-                }
-            }
-            settingSaveInFlight = false
-            if (result.granted) {
-                Toast.makeText(activity, "菜单外观偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
-            } else {
-                when (kind) {
-                    0 -> translucentPanelEnabled = previous
-                    1 -> compactMenuEnabled = previous
-                    2 -> visualComfortEnabled = previous
-                    else -> disableBackdropBlurEnabled = previous
-                }
-                Toast.makeText(activity, result.message.ifBlank { "菜单外观保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun saveMenuContent(option: String, enabled: Boolean) {
-        if (settingSaveInFlight) return
-        val previous = menuContentEnabled[option] == true
-        menuContentEnabled = menuContentEnabled + (option to enabled)
-        settingSaveInFlight = true
-        activity.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { RootAccess.saveMenuContent(option, enabled) }
-            settingSaveInFlight = false
-            if (result.granted) {
-                Toast.makeText(activity, "菜单内容偏好已保存，重新打开菜单后生效", Toast.LENGTH_SHORT).show()
-            } else {
-                menuContentEnabled = menuContentEnabled + (option to previous)
-                Toast.makeText(activity, result.message.ifBlank { "菜单内容保存失败，请确认 Root" }, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    fun refreshLauncher() {
-        if (refreshing) return
-        refreshing = true
-        activity.lifecycleScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) { RootAccess.refreshLauncher() }
-                if (result.granted) {
-                    Toast.makeText(activity, "桌面正在热刷新", Toast.LENGTH_SHORT).show()
-                    activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_HOME)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                } else {
-                    Toast.makeText(activity, result.message.ifBlank { "桌面刷新失败" }, Toast.LENGTH_LONG).show()
-                }
-            } finally {
-                refreshing = false
+    LaunchedEffect(model) {
+        model.events.collect { event ->
+            when (event) {
+                is UiEvent.Message -> Toast.makeText(activity, event.text,
+                    if (event.long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+                UiEvent.ReturnHome -> activity.startActivity(Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
             }
         }
     }
@@ -396,7 +228,7 @@ private fun LauncherSloganApp(activity: MainActivity) {
         if (index == pagerState.targetPage) return
         navigationJob?.cancel()
         navigationJob = navigationScope.launch {
-            pagerState.animateScrollToPage(index, animationSpec = MainPageAnimation)
+            pagerState.springAnimateToPage(index)
         }
     }
 
@@ -405,13 +237,12 @@ private fun LauncherSloganApp(activity: MainActivity) {
         if (page == Page.MAIN) {
             navigateMain(0)
         } else {
-            page = Page.MAIN
-            editing = null
+            model.backToMain()
         }
     }
 
     if (gateState.checking || !gateState.hookReady || !gateState.rootReady) {
-        EnvironmentGate(gateState) { gateRefreshSignal++ }
+        EnvironmentGate(gateState, model::recheck)
     } else {
         AnimatedContent(
             targetState = page,
@@ -420,11 +251,12 @@ private fun LauncherSloganApp(activity: MainActivity) {
                 (slideInHorizontally(
                     animationSpec = DetailPageAnimation,
                     initialOffsetX = { if (returning) -it / 4 else it },
-                ) + fadeIn(animationSpec = tween(160))) togetherWith
-                        (slideOutHorizontally(
-                            animationSpec = DetailPageAnimation,
-                            targetOffsetX = { if (returning) it else -it / 4 },
-                        ) + fadeOut(animationSpec = tween(120)))
+                ) togetherWith slideOutHorizontally(
+                    animationSpec = DetailPageAnimation,
+                    targetOffsetX = { if (returning) it else -it / 4 },
+                )).apply {
+                    targetContentZIndex = if (returning) -1f else 1f
+                }
             },
             modifier = Modifier.fillMaxSize().background(AppPalette.Background),
             label = "detail-transition",
@@ -435,36 +267,44 @@ private fun LauncherSloganApp(activity: MainActivity) {
                 ) {
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().pagerGestureOverride(
+                            pagerState = pagerState,
+                            mode = PagerInterceptionMode.TapToHalt,
+                        ),
                         beyondViewportPageCount = 1,
+                        overscrollEffect = null,
                         flingBehavior = PagerDefaults.flingBehavior(pagerState,
-                            snapAnimationSpec = MainPageAnimation),
+                            snapAnimationSpec = PagerNavigationSpringSpec),
                     ) { index ->
                         if (index == 0) {
                             HomeScreen(
                                 rules = rules,
                                 listState = homeListState,
-                                refreshing = refreshing,
-                                onRefresh = ::refreshLauncher,
-                                onAbout = { page = Page.ABOUT },
-                                onAdd = { openEditor(null) },
-                                onEdit = { openEditor(it) },
+                                reloading = model.reloadSourcePage == 0,
+                                onReload = { model.reloadSnapshot(0) },
+                                refreshing = model.busy,
+                                onRefresh = model::refreshLauncher,
+                                onAbout = model::openAbout,
+                                onAdd = { model.openEditor(null) },
+                                onEdit = model::openEditor,
                             )
                         } else {
                             SettingsScreen(
                                 listState = settingsListState,
-                                isSaving = settingSaveInFlight,
-                                onAbout = { page = Page.ABOUT },
-                                translucentPanelEnabled = translucentPanelEnabled,
-                                compactMenuEnabled = compactMenuEnabled,
-                                visualComfortEnabled = visualComfortEnabled,
-                                disableBackdropBlurEnabled = disableBackdropBlurEnabled,
-                                menuContentEnabled = menuContentEnabled,
-                                onPanelChange = { savePopupSetting(0, it) },
-                                onCompactChange = { savePopupSetting(1, it) },
-                                onVisualComfortChange = { savePopupSetting(2, it) },
-                                onDisableBackdropChange = { savePopupSetting(3, it) },
-                                onMenuContentChange = ::saveMenuContent,
+                                reloading = model.reloadSourcePage == 1,
+                                onReload = { model.reloadSnapshot(1) },
+                                isSaving = model.busy,
+                                onAbout = model::openAbout,
+                                translucentPanelEnabled = model.translucentPanelEnabled,
+                                compactMenuEnabled = model.compactMenuEnabled,
+                                visualComfortEnabled = model.visualComfortEnabled,
+                                disableBackdropBlurEnabled = model.disableBackdropBlurEnabled,
+                                menuContentEnabled = model.menuContentEnabled,
+                                onPanelChange = { model.savePopupSetting(0, it) },
+                                onCompactChange = { model.savePopupSetting(1, it) },
+                                onVisualComfortChange = { model.savePopupSetting(2, it) },
+                                onDisableBackdropChange = { model.savePopupSetting(3, it) },
+                                onMenuContentChange = model::saveMenuContent,
                             )
                         }
                     }
@@ -478,11 +318,11 @@ private fun LauncherSloganApp(activity: MainActivity) {
                 Page.EDIT -> EditScreen(
                     initial = editing,
                     saving = saving,
-                    onBack = { page = Page.MAIN; editing = null },
-                    onSave = ::saveRule,
-                    onDelete = { editing?.let(::deleteRule) },
+                    onBack = model::backToMain,
+                    onSave = model::saveRule,
+                    onDelete = { editing?.let(model::deleteRule) },
                 )
-                Page.ABOUT -> AboutScreen(activity = activity, onBack = { page = Page.MAIN })
+                Page.ABOUT -> AboutScreen(activity = activity, onBack = model::backToMain)
             }
         }
     }
@@ -510,6 +350,8 @@ private fun MainPageHeader(
 private fun HomeScreen(
     rules: List<SloganRule>,
     listState: LazyListState,
+    reloading: Boolean,
+    onReload: () -> Unit,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onAbout: () -> Unit,
@@ -531,52 +373,58 @@ private fun HomeScreen(
                         colorFilter = ColorFilter.tint(AppPalette.Ink))
                 }
             }
-            if (rules.isEmpty()) {
-                Column(
-                    Modifier.fillMaxWidth().weight(1f).padding(bottom = 128.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-                ) {
-                    Text("还没有标语", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = AppPalette.Ink)
-                    Text("点击右下角添加应用规则", fontSize = 13.sp, color = AppPalette.Muted)
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    item(key = "rules-heading") {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text("应用规则", Modifier.weight(1f), fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium, color = AppPalette.Muted)
-                            Text("${rules.size} 项", fontSize = 12.sp, color = AppPalette.Muted)
-                        }
+            PullToRefresh(
+                isRefreshing = reloading,
+                onRefresh = onReload,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                refreshTexts = ListRefreshTexts,
+            ) {
+                if (rules.isEmpty()) {
+                    Column(
+                        Modifier.fillMaxSize().padding(bottom = 128.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+                    ) {
+                        Text("还没有标语", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = AppPalette.Ink)
+                        Text("点击右下角添加应用规则", fontSize = 13.sp, color = AppPalette.Muted)
                     }
-                    items(rules, key = { it.packageName }) { rule ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-                            pressFeedbackType = PressFeedbackType.Sink,
-                            showIndication = true,
-                            onClick = { onEdit(rule) },
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(16.dp),
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize().scrollEndHaptic().overScrollVertical(),
+                        overscrollEffect = null,
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        item(key = "rules-heading", contentType = "heading") {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(rule.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                                        color = AppPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    if (rule.subtitle.isNotBlank()) {
-                                        Text(rule.subtitle, fontSize = 13.sp, color = AppPalette.Muted,
-                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text("应用规则", Modifier.weight(1f), fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium, color = AppPalette.Muted)
+                                Text("${rules.size} 项", fontSize = 12.sp, color = AppPalette.Muted)
+                            }
+                        }
+                        items(rules, key = { it.packageName }, contentType = { "rule" }) { rule ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .background(AppPalette.Surface)
+                                    .clickable(interactionSource = null, indication = RulePressIndication) { onEdit(rule) },
+                            ) {
+                                Row(Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(rule.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                                            color = AppPalette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        if (rule.subtitle.isNotBlank()) {
+                                            Text(rule.subtitle, fontSize = 13.sp, color = AppPalette.Muted,
+                                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        }
+                                        Text(rule.packageName, fontSize = 11.sp, color = AppPalette.Muted,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Text(rule.packageName, fontSize = 11.sp, color = AppPalette.Muted,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("›", Modifier.padding(start = 12.dp).clearAndSetSemantics {},
+                                        fontSize = 24.sp, color = AppPalette.Muted)
                                 }
-                                Text("›", Modifier.padding(start = 12.dp).clearAndSetSemantics {},
-                                    fontSize = 24.sp, color = AppPalette.Muted)
                             }
                         }
                     }
@@ -596,6 +444,8 @@ private fun HomeScreen(
 @Composable
 private fun SettingsScreen(
     listState: LazyListState,
+    reloading: Boolean,
+    onReload: () -> Unit,
     isSaving: Boolean,
     onAbout: () -> Unit,
     translucentPanelEnabled: Boolean,
@@ -622,69 +472,55 @@ private fun SettingsScreen(
                     colorFilter = ColorFilter.tint(AppPalette.Ink))
             }
         }
-        LazyColumn(
-            state = listState,
+        PullToRefresh(
+            isRefreshing = reloading,
+            onRefresh = onReload,
             modifier = Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(bottom = 120.dp),
+            refreshTexts = ListRefreshTexts,
         ) {
-            item { SectionTitle("菜单外观", topPadding = 4.dp) }
-            item {
-                Card(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-                ) {
-                    SettingSwitch(
-                        checked = translucentPanelEnabled,
-                        enabled = !isSaving,
-                        onCheckedChange = onPanelChange,
-                        title = "半透明白菜单",
-                        summary = "让桌面背景轻透可见",
-                    )
-                    SettingsDivider()
-                    SettingSwitch(
-                        checked = compactMenuEnabled,
-                        enabled = !isSaving,
-                        onCheckedChange = onCompactChange,
-                        title = "紧凑菜单",
-                        summary = "收窄面板、文字和菜单行",
-                    )
-                    SettingsDivider()
-                    SettingSwitch(
-                        checked = visualComfortEnabled,
-                        enabled = compactMenuEnabled && !isSaving,
-                        onCheckedChange = onVisualComfortChange,
-                        title = "视觉舒适",
-                        summary = "紧凑模式下减少空白约 35%",
-                    )
-                    SettingsDivider()
-                    SettingSwitch(
-                        checked = disableBackdropBlurEnabled,
-                        enabled = !isSaving,
-                        onCheckedChange = onDisableBackdropChange,
-                        title = "关闭全屏背景模糊",
-                        summary = "保持桌面背景清晰",
-                    )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().scrollEndHaptic().overScrollVertical(),
+                overscrollEffect = null,
+                contentPadding = PaddingValues(bottom = 120.dp),
+            ) {
+                item(key = "appearance-heading", contentType = "heading") {
+                    SectionTitle("菜单外观", topPadding = 4.dp)
                 }
-            }
-            item { SectionTitle("菜单内容") }
-            item {
-                MenuContentGroup(MenuContentOptions.take(2), menuContentEnabled, !isSaving, onMenuContentChange)
-            }
-            item { SectionTitle("系统菜单项") }
-            item {
-                MenuContentGroup(MenuContentOptions.drop(2), menuContentEnabled, !isSaving, onMenuContentChange)
+                item(key = "appearance", contentType = "settings-group") {
+                    SettingsRows(4) { index ->
+                        when (index) {
+                            0 -> SettingSwitch(translucentPanelEnabled, !isSaving, onPanelChange,
+                                "半透明白菜单", "让桌面背景轻透可见")
+                            1 -> SettingSwitch(compactMenuEnabled, !isSaving, onCompactChange,
+                                "紧凑菜单", "收窄面板、文字和菜单行")
+                            2 -> SettingSwitch(visualComfortEnabled, compactMenuEnabled && !isSaving,
+                                onVisualComfortChange, "视觉舒适", "紧凑模式下减少空白约 35%")
+                            3 -> SettingSwitch(disableBackdropBlurEnabled, !isSaving, onDisableBackdropChange,
+                                "关闭全屏背景模糊", "保持桌面背景清晰")
+                        }
+                    }
+                }
+                item(key = "content-heading", contentType = "heading") { SectionTitle("菜单内容") }
+                item(key = "content", contentType = "settings-group") {
+                    MenuContentRows(MenuContentOptions.take(2), menuContentEnabled, !isSaving, onMenuContentChange)
+                }
+                item(key = "system-heading", contentType = "heading") { SectionTitle("系统菜单项") }
+                item(key = "system", contentType = "settings-group") {
+                    MenuContentRows(MenuContentOptions.drop(2), menuContentEnabled, !isSaving, onMenuContentChange)
+                }
             }
         }
     }
 }
 
-private data class MenuContentOption(
+internal data class MenuContentOption(
     val key: String,
     val title: String,
     val summary: String,
 )
 
-private val MenuContentOptions = listOf(
+internal val MenuContentOptions = listOf(
     MenuContentOption(
         MenuContentSettings.DISABLE_LONG_PRESS_MENU,
         "移除“更多”入口",
@@ -727,22 +563,32 @@ private val MenuContentOptions = listOf(
     ),
 )
 
+/** Draws one settings group without changing the list's input or scroll behavior. */
 @Composable
-private fun MenuContentGroup(
+private fun SettingsRows(
+    count: Int,
+    content: @Composable (Int) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        .background(AppPalette.Surface, RoundedCornerShape(16.dp))) {
+        repeat(count) { index ->
+            content(index)
+            if (index < count - 1) SettingsDivider()
+        }
+    }
+}
+
+@Composable
+private fun MenuContentRows(
     options: List<MenuContentOption>,
     values: Map<String, Boolean>,
     enabled: Boolean,
     onChange: (String, Boolean) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(color = AppPalette.Surface),
-    ) {
-        options.forEachIndexed { index, option ->
-            SettingSwitch(values[option.key] == true, enabled, { onChange(option.key, it) },
-                option.title, option.summary)
-            if (index < options.lastIndex) SettingsDivider()
-        }
+    SettingsRows(options.size) { index ->
+        val option = options[index]
+        SettingSwitch(values[option.key] == true, enabled, { onChange(option.key, it) },
+            option.title, option.summary)
     }
 }
 
@@ -785,10 +631,10 @@ private fun EditScreen(
     onSave: (String, String, String, String) -> Unit,
     onDelete: () -> Unit,
 ) {
-    var packageName by remember(initial) { mutableStateOf(initial?.packageName.orEmpty()) }
-    var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
-    var subtitle by remember(initial) { mutableStateOf(initial?.subtitle.orEmpty()) }
-    var toastMessage by remember(initial) { mutableStateOf(initial?.toastMessage.orEmpty()) }
+    var packageName by rememberSaveable(initial?.packageName) { mutableStateOf(initial?.packageName.orEmpty()) }
+    var title by rememberSaveable(initial?.packageName) { mutableStateOf(initial?.title.orEmpty()) }
+    var subtitle by rememberSaveable(initial?.packageName) { mutableStateOf(initial?.subtitle.orEmpty()) }
+    var toastMessage by rememberSaveable(initial?.packageName) { mutableStateOf(initial?.toastMessage.orEmpty()) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -801,10 +647,15 @@ private fun EditScreen(
             }
             Text(if (initial == null) "添加菜单项" else "编辑菜单项", modifier = Modifier.padding(start = 8.dp), fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).imePadding()
+                .verticalScroll(rememberScrollState(), overscrollEffect = null)
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             TextField(
                 value = packageName,
-                onValueChange = { packageName = it.take(180) },
+                onValueChange = { packageName = TextInputLimit.truncate(it, 180) },
                 modifier = Modifier.fillMaxWidth(),
                 label = "应用包名",
                 useLabelAsPlaceholder = true,
@@ -814,7 +665,7 @@ private fun EditScreen(
             )
             TextField(
                 value = title,
-                onValueChange = { title = it.take(RuleStore.maxTitleLength()) },
+                onValueChange = { title = TextInputLimit.truncate(it, RuleStore.maxTitleLength()) },
                 modifier = Modifier.fillMaxWidth(),
                 label = "主标语",
                 useLabelAsPlaceholder = true,
@@ -823,7 +674,7 @@ private fun EditScreen(
             )
             TextField(
                 value = subtitle,
-                onValueChange = { subtitle = it.take(RuleStore.maxSubtitleLength()) },
+                onValueChange = { subtitle = TextInputLimit.truncate(it, RuleStore.maxSubtitleLength()) },
                 modifier = Modifier.fillMaxWidth(),
                 label = "副标语（可选）",
                 useLabelAsPlaceholder = true,
@@ -832,7 +683,7 @@ private fun EditScreen(
             )
             TextField(
                 value = toastMessage,
-                onValueChange = { toastMessage = it.take(RuleStore.maxToastLength()) },
+                onValueChange = { toastMessage = TextInputLimit.truncate(it, RuleStore.maxToastLength()) },
                 modifier = Modifier.fillMaxWidth(),
                 label = "点击气泡（可选）",
                 useLabelAsPlaceholder = true,
@@ -862,29 +713,6 @@ private fun EditScreen(
     }
 }
 
-private const val LAUNCHER_VERIFY_RETRY_COUNT = 4
-private const val LAUNCHER_VERIFY_TOTAL_TIMEOUT_MS = 900L
-private const val LAUNCHER_VERIFY_ATTEMPT_TIMEOUT_MS = 225L
-
-private fun waitForLauncherVerification(activity: MainActivity): Boolean {
-    val requestId = ModuleStatusProvider.beginLauncherVerification(activity) ?: return false
-    val verificationIntent = Intent(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER)
-        .setPackage(ModuleStatusProvider.LAUNCHER_PACKAGE)
-        .putExtra(ModuleStatusProvider.EXTRA_REQUEST_ID, requestId)
-    val deadline = SystemClock.elapsedRealtime() + LAUNCHER_VERIFY_TOTAL_TIMEOUT_MS
-    try {
-        repeat(LAUNCHER_VERIFY_RETRY_COUNT) {
-            val remaining = deadline - SystemClock.elapsedRealtime()
-            if (remaining <= 0L) return false
-            activity.sendBroadcast(verificationIntent)
-            val waitMs = minOf(remaining, LAUNCHER_VERIFY_ATTEMPT_TIMEOUT_MS)
-            if (ModuleStatusProvider.awaitLauncherVerification(requestId, waitMs)) return true
-        }
-    } catch (_: Throwable) {
-        return false
-    }
-    return false
-}
 
 @Composable
 private fun EnvironmentGate(state: GateState, onRefresh: () -> Unit) {
@@ -1075,7 +903,7 @@ private fun AboutInfoDivider() {
 private fun openExternalUrl(activity: MainActivity, url: String) {
     try {
         activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (_: Throwable) {
+    } catch (_: RuntimeException) {
         Toast.makeText(activity, "无法打开链接", Toast.LENGTH_SHORT).show()
     }
 }
@@ -1114,11 +942,11 @@ private fun AboutActionRow(
     title: String,
     summary: String,
     action: String,
-    onClick: (() -> Unit)?,
+    onClick: () -> Unit,
 ) {
-    val rowModifier = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
     Row(
-        modifier = rowModifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier.clickable(onClick = onClick).fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

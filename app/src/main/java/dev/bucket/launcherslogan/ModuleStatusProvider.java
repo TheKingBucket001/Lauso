@@ -14,23 +14,24 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static dev.bucket.launcherslogan.VerificationContract.EXTRA_ACCEPTED;
+import static dev.bucket.launcherslogan.VerificationContract.METHOD_BEGIN;
+import static dev.bucket.launcherslogan.VerificationContract.METHOD_CONFIRM;
+import static dev.bucket.launcherslogan.VerificationContract.uri;
+
 /**
  * Coordinates a short-lived, caller-verified handshake between the management app and Launcher.
  * A historical Hook heartbeat is deliberately insufficient: every app launch needs a new reply.
  */
 public final class ModuleStatusProvider extends ContentProvider {
-    public static final String AUTHORITY = "dev.bucket.launcherslogan.status";
-    public static final String LAUNCHER_PACKAGE = "com.android.launcher";
+    public static final String AUTHORITY = VerificationContract.AUTHORITY;
+    public static final String LAUNCHER_PACKAGE = VerificationContract.LAUNCHER_PACKAGE;
     public static final String ACTION_VERIFY_LAUNCHER =
-            "dev.bucket.launcherslogan.action.VERIFY_LAUNCHER";
-    public static final String EXTRA_REQUEST_ID = "request_id";
+            VerificationContract.ACTION_VERIFY_LAUNCHER;
+    public static final String EXTRA_REQUEST_ID = VerificationContract.EXTRA_REQUEST_ID;
     public static final String PERMISSION_VERIFY_LAUNCHER =
-            "dev.bucket.launcherslogan.permission.VERIFY_LAUNCHER";
+            VerificationContract.PERMISSION_VERIFY_LAUNCHER;
 
-    private static final String PATH = "status";
-    private static final String METHOD_BEGIN = "begin_launcher_verification";
-    private static final String METHOD_CONFIRM = "confirm_launcher_verification";
-    private static final String EXTRA_ACCEPTED = "accepted";
     private static final long REQUEST_TTL_MS = 8_000L;
     private static final Object VERIFICATION_LOCK = new Object();
     private static PendingVerification pendingVerification;
@@ -47,10 +48,6 @@ public final class ModuleStatusProvider extends ContentProvider {
         }
     }
 
-    public static Uri uri() {
-        return Uri.parse("content://" + AUTHORITY + "/" + PATH);
-    }
-
     /** Starts a new verification round and invalidates every older Launcher response. */
     public static String beginLauncherVerification(Context context) {
         try {
@@ -59,19 +56,6 @@ public final class ModuleStatusProvider extends ContentProvider {
             return result.getString(EXTRA_REQUEST_ID);
         } catch (Throwable ignored) {
             return null;
-        }
-    }
-
-    /** Called only from the dynamically registered receiver in the injected Launcher process. */
-    public static boolean confirmLauncherVerification(Context context, String requestId) {
-        if (requestId == null || requestId.isEmpty()) return false;
-        try {
-            Bundle extras = new Bundle();
-            extras.putString(EXTRA_REQUEST_ID, requestId);
-            Bundle result = context.getContentResolver().call(uri(), METHOD_CONFIRM, null, extras);
-            return result != null && result.getBoolean(EXTRA_ACCEPTED, false);
-        } catch (Throwable ignored) {
-            return false;
         }
     }
 

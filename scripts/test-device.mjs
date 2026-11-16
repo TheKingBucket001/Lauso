@@ -13,6 +13,8 @@ if (!platformDir) throw new Error(`Install Android platform ${platform} first.`)
 const androidJar = join(sdk, 'platforms', platformDir, 'android.jar');
 const d8 = join(sdk, 'build-tools/35.0.0/lib/d8.jar');
 const source = join(root, 'app/src/main/java/dev/bucket/launcherslogan');
+const shared = join(root, 'shared/src/main/java/dev/bucket/launcherslogan');
+const hook = join(root, 'hook/src/main/java/dev/bucket/launcherslogan/hook');
 const tests = join(root, 'scripts/device-tests');
 const work = mkdtempSync(join(tmpdir(), 'lauso-code-audit-'));
 const deviceJar = `/data/local/tmp/lauso-code-audit-${process.pid}.jar`;
@@ -28,7 +30,7 @@ try {
     const files = directory => readdirSync(directory).filter(name => name.endsWith('.java')).map(name => join(directory, name));
     run('javac', ['-encoding', 'UTF-8', '-source', '8', '-target', '8', '-cp',
         [androidJar, api].join(process.platform === 'win32' ? ';' : ':'),
-        '-d', classes, ...files(source), ...files(tests)]);
+        '-d', classes, ...files(source), ...files(shared), ...files(hook), ...files(tests)]);
     const testClasses = join(work, 'test-classes.jar');
     const dex = join(work, 'device-tests.jar');
     run('jar', ['--create', '--file', testClasses, '-C', classes, '.']);

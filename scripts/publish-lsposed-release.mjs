@@ -8,6 +8,17 @@ import { githubToken, verifyReleaseTag } from './verify-release-tag.mjs';
 
 const sourceRepository = 'TheKingBucket001/Lauso';
 const mirrorRepository = 'Xposed-Modules-Repo/dev.bucket.launcherslogan';
+const releaseCertificateSha256 = 'ff14ab0eb57ec01d1c5092f4326d45b23cc363053b6e210e3382236a58c224e7';
+
+/** Check the signer identity after apksigner verify has completed successfully. */
+export function verifyReleaseCertificate(signature) {
+    const certificates = [...signature.matchAll(/^Signer #[0-9]+ certificate SHA-256 digest: ([a-fA-F0-9]{64})\r?$/gm)]
+        .map(match => match[1].toLowerCase());
+    if (certificates.length !== 1 || certificates[0] !== releaseCertificateSha256) {
+        throw new Error('Release APK must have exactly the established LauSo signing certificate.');
+    }
+    return certificates[0];
+}
 
 function clients(token) {
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
@@ -47,7 +58,7 @@ function clients(token) {
                 const options = { encoding: 'utf8', timeout: 30_000 };
                 const signature = execFileSync('java', ['-jar', join(buildTools, 'lib/apksigner.jar'),
                     'verify', '--verbose', '--print-certs', file], options);
-                if (signature.includes('Android Debug')) throw new Error('Refusing a debug-signed release APK.');
+                verifyReleaseCertificate(signature);
                 const badging = execFileSync(join(buildTools, process.platform === 'win32' ? 'aapt.exe' : 'aapt'),
                     ['dump', 'badging', file], options);
                 const metadata = /^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'/m.exec(badging);

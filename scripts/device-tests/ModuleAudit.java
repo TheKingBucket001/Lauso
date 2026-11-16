@@ -8,12 +8,16 @@ import android.graphics.drawable.RippleDrawable;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewOutlineProvider;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import dev.bucket.launcherslogan.hook.LauncherSloganModule;
 
 /** Tests isolated View trees and read-only Root commands; does not change user settings. */
 public final class ModuleAudit {
@@ -47,6 +51,97 @@ public final class ModuleAudit {
     }
     private static boolean isRow(View view) throws Exception {
         return (Boolean) call("isShortcutRow", new Class<?>[]{View.class, int.class}, view, TEXT_ID);
+    }
+    private static Object guard(FrameLayout container, Context context) throws Exception {
+        Class<?> type = Class.forName(LauncherSloganModule.class.getName() + "$PopupMaterialGuard");
+        java.lang.reflect.Constructor<?> constructor = type.getDeclaredConstructor(
+                ViewGroup.class, ViewTreeObserver.class, Context.class, boolean.class, boolean.class);
+        constructor.setAccessible(true);
+        Object guard = constructor.newInstance(container, container.getViewTreeObserver(), context, false, false);
+        state("MATERIAL_PRE_DRAW_GUARDS").put(container, guard);
+        Method attach = type.getDeclaredMethod("attach");
+        attach.setAccessible(true);
+        attach.invoke(guard);
+        return guard;
+    }
+    private static boolean hasPreDrawListeners(ViewTreeObserver observer) throws Exception {
+        Method hasListeners = ViewTreeObserver.class.getDeclaredMethod("hasOnPreDrawListeners");
+        hasListeners.setAccessible(true);
+        return (Boolean) hasListeners.invoke(observer);
+    }
+    private static boolean guardReleased(Object guard) throws Exception {
+        for (String name : new String[]{"context", "observer"}) {
+            Field field = guard.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            if (field.get(guard) != null) return false;
+        }
+        return true;
+    }
+    private static void auditGuard(Context context) throws Exception {
+        FrameLayout container = new FrameLayout(context);
+        ViewTreeObserver floating = container.getViewTreeObserver();
+        Object guard = guard(container, context);
+        check(hasPreDrawListeners(floating), "material guard registers a pre-draw listener");
+
+        // Exercise Android's real listener transfer, then the matching attach/detach callbacks.
+        // This does not pretend that these isolated View trees have a real Window.
+        FrameLayout windowOwner = new FrameLayout(context);
+        ViewTreeObserver windowObserver = windowOwner.getViewTreeObserver();
+        Method merge = ViewTreeObserver.class.getDeclaredMethod("merge", ViewTreeObserver.class);
+        merge.setAccessible(true);
+        merge.invoke(windowObserver, floating);
+        ((View.OnAttachStateChangeListener) guard).onViewAttachedToWindow(windowOwner);
+        check(!floating.isAlive() && hasPreDrawListeners(windowObserver),
+                "floating observer transfers its guard to the window observer");
+        ((View.OnAttachStateChangeListener) guard).onViewDetachedFromWindow(container);
+        check(!hasPreDrawListeners(windowObserver)
+                        && !state("MATERIAL_PRE_DRAW_GUARDS").containsKey(container) && guardReleased(guard),
+                "detach before the first frame removes the transferred listener and releases state");
+        check(((ViewTreeObserver.OnPreDrawListener) guard).onPreDraw()
+                        && !hasPreDrawListeners(windowObserver),
+                "retired guard stays inert on a stale pre-draw callback");
+
+        FrameLayout expired = new FrameLayout(context) {
+            @Override public boolean isAttachedToWindow() { return true; }
+        };
+        Object expiredGuard = guard(expired, context);
+        state("ORIGINAL_CONTAINER_BACKGROUNDS").put(expired, null);
+        Field expiresAt = expiredGuard.getClass().getDeclaredField("expiresAtMs");
+        expiresAt.setAccessible(true);
+        expiresAt.setLong(expiredGuard, 0L);
+        ((ViewTreeObserver.OnPreDrawListener) expiredGuard).onPreDraw();
+        check(!state("APPLIED_PANEL_BACKGROUNDS").containsKey(expired)
+                        && !state("MATERIAL_PRE_DRAW_GUARDS").containsKey(expired)
+                        && !hasPreDrawListeners(expired.getViewTreeObserver()) && guardReleased(expiredGuard),
+                "expired guard retires before rebuilding any material");
+        state("ORIGINAL_CONTAINER_BACKGROUNDS").remove(expired);
+
+        class FailingFrame extends FrameLayout {
+            boolean fail;
+            int failedReads;
+            FailingFrame() { super(context); }
+            @Override public boolean isAttachedToWindow() { return true; }
+            @Override public Drawable getBackground() {
+                if (fail) {
+                    failedReads++;
+                    throw new IllegalStateException("expected material guard audit failure");
+                }
+                return super.getBackground();
+            }
+        }
+        FailingFrame failing = new FailingFrame();
+        Object failedGuard = guard(failing, context);
+        expiresAt.setLong(failedGuard, Long.MAX_VALUE);
+        state("ORIGINAL_CONTAINER_BACKGROUNDS").put(failing, null);
+        failing.fail = true;
+        ((ViewTreeObserver.OnPreDrawListener) failedGuard).onPreDraw();
+        ((ViewTreeObserver.OnPreDrawListener) failedGuard).onPreDraw();
+        check(failing.failedReads == 1 && guardReleased(failedGuard)
+                        && !hasPreDrawListeners(failing.getViewTreeObserver())
+                        && !state("MATERIAL_PRE_DRAW_GUARDS").containsKey(failing),
+                "material failure retires the guard and cannot repeat on later frames");
+        failing.fail = false;
+        call("restorePanelBackground", new Class<?>[]{View.class}, failing);
     }
     public static void main(String[] args) throws Exception {
         RuleStoreAudit.main(args);
@@ -113,6 +208,7 @@ public final class ModuleAudit {
         call("restorePanelBackground", new Class<?>[]{View.class}, root);
         check(root.getBackground() == panel && first.getForeground() == rowForeground,
                 "cleanup is idempotent");
+        auditGuard(context);
 
         Field rootId = RootAccess.class.getDeclaredField("ROOT_ID");
         rootId.setAccessible(true);

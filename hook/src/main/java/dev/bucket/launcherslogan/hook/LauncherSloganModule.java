@@ -1,4 +1,4 @@
-package dev.bucket.launcherslogan;
+package dev.bucket.launcherslogan.hook;
 
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
@@ -49,12 +49,19 @@ import java.util.Collections;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import dev.bucket.launcherslogan.MenuContentSettings;
+import dev.bucket.launcherslogan.MenuMaterialSettings;
+import dev.bucket.launcherslogan.RuleStore;
+import dev.bucket.launcherslogan.SloganRule;
+import dev.bucket.launcherslogan.VerificationContract;
+
 import io.github.libxposed.api.XposedModule;
+import io.github.libxposed.api.XposedInterface.HookHandle;
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
 
 public final class LauncherSloganModule extends XposedModule {
     private static final String TAG = "LauncherSlogan";
-    private static final String LAUNCHER_PACKAGE = "com.android.launcher";
+    private static final String LAUNCHER_PACKAGE = VerificationContract.LAUNCHER_PACKAGE;
     private static final String POPUP_CLASS =
             "com.android.launcher3.popup.OplusPopupContainerWithArrow";
     private static final String ROW_TAG = "dev.bucket.launcherslogan.row";
@@ -172,11 +179,12 @@ public final class LauncherSloganModule extends XposedModule {
         }
 
         final Class<?> popupClass;
+        HookHandle reorderHook = null;
         try {
             popupClass = Class.forName(POPUP_CLASS, false, param.getClassLoader());
             Method reorderAndShow = popupClass.getDeclaredMethod("reorderAndShow", int.class);
             Method orientAboutObject = popupClass.getMethod("orientAboutObject");
-            hook(reorderAndShow).intercept(chain -> {
+            reorderHook = hook(reorderAndShow).intercept(chain -> {
                 Object popup = chain.getThisObject();
                 try {
                     addSloganRow(popup);
@@ -201,7 +209,18 @@ public final class LauncherSloganModule extends XposedModule {
                 return chain.proceed();
             });
         } catch (Throwable error) {
-            hookInstalled.set(false);
+            boolean rolledBack = true;
+            if (reorderHook != null) {
+                try {
+                    reorderHook.unhook();
+                } catch (Throwable rollbackError) {
+                    rolledBack = false;
+                    log(Log.ERROR, TAG,
+                            "Unable to roll back partial geometry hook; duplicate installation blocked",
+                            rollbackError);
+                }
+            }
+            if (rolledBack) hookInstalled.set(false);
             log(Log.ERROR, TAG, "Launcher geometry hook installation failed", error);
             return;
         }
@@ -787,10 +806,11 @@ public final class LauncherSloganModule extends XposedModule {
     }
 
     /** A short opening-only guard for Oplus's deferred structural background restoration. */
-    private static final class PopupMaterialGuard implements ViewTreeObserver.OnPreDrawListener {
+    private static final class PopupMaterialGuard implements ViewTreeObserver.OnPreDrawListener,
+            View.OnAttachStateChangeListener {
         private final WeakReference<ViewGroup> containerReference;
-        private final ViewTreeObserver observer;
-        private final Context context;
+        private ViewTreeObserver observer;
+        private Context context;
         private final boolean compact;
         private final boolean visualComfort;
         private long expiresAtMs;
@@ -810,7 +830,13 @@ public final class LauncherSloganModule extends XposedModule {
         }
 
         void attach() {
-            if (observer.isAlive()) observer.addOnPreDrawListener(this);
+            ViewGroup container = containerReference.get();
+            if (container == null || context == null || observer == null || !observer.isAlive()) {
+                detach();
+                return;
+            }
+            observer.addOnPreDrawListener(this);
+            container.addOnAttachStateChangeListener(this);
         }
 
         void arm() {
@@ -818,28 +844,51 @@ public final class LauncherSloganModule extends XposedModule {
         }
 
         void detach() {
-            if (observer.isAlive()) observer.removeOnPreDrawListener(this);
+            if (observer == null) return;
+            ViewGroup container = containerReference.get();
+            if (observer.isAlive()) {
+                observer.removeOnPreDrawListener(this);
+            } else if (container != null) {
+                ViewTreeObserver current = container.getViewTreeObserver();
+                if (current.isAlive()) current.removeOnPreDrawListener(this);
+            }
+            if (container != null) {
+                container.removeOnAttachStateChangeListener(this);
+                if (MATERIAL_PRE_DRAW_GUARDS.get(container) == this) {
+                    MATERIAL_PRE_DRAW_GUARDS.remove(container);
+                }
+            }
+            observer = null;
+            context = null;
+        }
+
+        @Override
+        public void onViewAttachedToWindow(View view) {
+            // A floating observer's listeners are merged into the window observer on attach.
+            // Remember that owner even when detach happens before the first pre-draw.
+            if (context != null) observer = view.getViewTreeObserver();
+        }
+
+        @Override
+        public void onViewDetachedFromWindow(View view) {
+            detach();
         }
 
         @Override
         public boolean onPreDraw() {
             ViewGroup container = containerReference.get();
-            if (container == null) {
+            Context frameContext = context;
+            if (container == null || frameContext == null || !container.isAttachedToWindow()
+                    || SystemClock.uptimeMillis() >= expiresAtMs) {
                 detach();
                 return true;
             }
             try {
-                if (container.isAttachedToWindow()) {
-                    reapplyPopupMaterialFrame(container, context, compact, visualComfort);
-                }
+                reapplyPopupMaterialFrame(container, frameContext, compact, visualComfort);
             } catch (Throwable error) {
-                Log.w(TAG, "Unable to guard popup material before draw", error);
-            }
-            if (SystemClock.uptimeMillis() >= expiresAtMs || !container.isAttachedToWindow()) {
-                if (MATERIAL_PRE_DRAW_GUARDS.get(container) == this) {
-                    MATERIAL_PRE_DRAW_GUARDS.remove(container);
-                }
+                // A failed repair should leave the frame loop, rather than repeat its exception.
                 detach();
+                Log.w(TAG, "Unable to guard popup material before draw", error);
             }
             return true;
         }
@@ -2031,22 +2080,22 @@ public final class LauncherSloganModule extends XposedModule {
             BroadcastReceiver receiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context receiverContext, Intent intent) {
-                    if (intent == null || !ModuleStatusProvider.ACTION_VERIFY_LAUNCHER.equals(
+                    if (intent == null || !VerificationContract.ACTION_VERIFY_LAUNCHER.equals(
                             intent.getAction())) {
                         return;
                     }
-                    ModuleStatusProvider.confirmLauncherVerification(receiverContext,
-                            intent.getStringExtra(ModuleStatusProvider.EXTRA_REQUEST_ID));
+                    VerificationContract.confirmLauncherVerification(receiverContext,
+                            intent.getStringExtra(VerificationContract.EXTRA_REQUEST_ID));
                 }
             };
-            IntentFilter filter = new IntentFilter(ModuleStatusProvider.ACTION_VERIFY_LAUNCHER);
+            IntentFilter filter = new IntentFilter(VerificationContract.ACTION_VERIFY_LAUNCHER);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter,
-                        ModuleStatusProvider.PERMISSION_VERIFY_LAUNCHER, null,
+                        VerificationContract.PERMISSION_VERIFY_LAUNCHER, null,
                         Context.RECEIVER_EXPORTED);
             } else {
                 context.registerReceiver(receiver, filter,
-                        ModuleStatusProvider.PERMISSION_VERIFY_LAUNCHER, null);
+                        VerificationContract.PERMISSION_VERIFY_LAUNCHER, null);
             }
             verificationReceiverInstalled.set(true);
             log(Log.INFO, TAG, "Launcher verification receiver installed");

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { githubToken, verifyReleaseTag } from './verify-release-tag.mjs';
+import { verifyReleaseCertificate } from './publish-lsposed-release.mjs';
 
 const root = resolve(process.argv[2] || join(dirname(fileURLToPath(import.meta.url)), '../../verification-temp/release-audit'));
 const sdk = process.argv[3] || process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
@@ -22,7 +23,6 @@ async function api(path) {
     return response.json();
 }
 const evidence = { checkedAt: new Date().toISOString(), repositories: [] };
-let releaseCertificate;
 const temporary = mkdtempSync(join(tmpdir(), 'lauso-release-check-'));
 try {
     for (const repository of repos) {
@@ -60,12 +60,7 @@ try {
                 writeFileSync(apk, buffer);
                 const signature = execFileSync('java', ['-jar', join(buildTools, 'lib/apksigner.jar'),
                     'verify', '--verbose', '--print-certs', apk], { encoding: 'utf8' });
-                if (signature.includes('Android Debug')) throw new Error('Debug APK in formal release.');
-                const certificate = /Signer #1 certificate SHA-256 digest: (\w+)/.exec(signature)?.[1];
-                if (!certificate || (releaseCertificate && certificate !== releaseCertificate)) {
-                    throw new Error('Release APK signing certificate mismatch.');
-                }
-                releaseCertificate = certificate;
+                verifyReleaseCertificate(signature);
                 const badging = execFileSync(join(buildTools, process.platform === 'win32' ? 'aapt.exe' : 'aapt'), ['dump', 'badging', apk], { encoding: 'utf8' });
                 const metadata = /^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'/m.exec(badging);
                 if (!metadata || metadata[1] !== 'dev.bucket.launcherslogan'

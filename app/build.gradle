@@ -34,6 +34,24 @@ def hasReleaseSigning = releaseStoreFile != null
         && releaseKeyPassword != null
         && !releaseKeyPassword.isEmpty()
 
+// Framework classes remain invisible to UI compilation and are never packaged in the APK.
+def xposedR8LibraryDir = layout.buildDirectory.dir('generated/r8-xposed')
+def prepareXposedR8Library = tasks.register('prepareXposedR8Library') {
+    def apiArchive = rootProject.file('local-libs/libxposed-api-102.0.0.aar')
+    inputs.file(apiArchive)
+    outputs.dir(xposedR8LibraryDir)
+    doLast {
+        def output = xposedR8LibraryDir.get().asFile
+        copy {
+            from zipTree(apiArchive)
+            include 'classes.jar'
+            into output
+        }
+        def library = new File(output, 'classes.jar').absolutePath.replace('\\', '/')
+        new File(output, 'framework.pro').setText("-libraryjars '${library}'\n", 'UTF-8')
+    }
+}
+
 android {
     namespace 'dev.bucket.launcherslogan'
     compileSdk 37
@@ -42,8 +60,8 @@ android {
         applicationId 'dev.bucket.launcherslogan'
         minSdk 26
         targetSdk 36
-        versionCode 9
-        versionName '0.6.5'
+        versionCode 11
+        versionName '0.7.0'
     }
 
     signingConfigs {
@@ -66,12 +84,9 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Local builds remain testable with the Android debug key. CI release tags
-            // must run checkReleaseSigning first and will use the formal key above.
+            proguardFile xposedR8LibraryDir.get().file('framework.pro').asFile
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.getByName('release')
-            } else {
-                signingConfig signingConfigs.debug
             }
         }
     }
@@ -79,7 +94,7 @@ android {
     packaging {
         resources {
             merges += ['META-INF/xposed/**']
-            excludes += ['kotlin/**', 'META-INF/com/android/build/**', 'META-INF/version-control-info.textproto']
+            excludes += ['kotlin/**', 'META-INF/com/android/build/**', 'META-INF/version-control-info.textproto', 'DebugProbesKt.bin']
         }
     }
 
@@ -91,6 +106,15 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.configureEach {
+    if ((name.startsWith('minify') && name.endsWith('WithR8')) || name.toLowerCase().contains('lint')) {
+        dependsOn(prepareXposedR8Library)
+    }
+    if (name in ['assembleRelease', 'bundleRelease', 'packageRelease', 'packageReleaseBundle']) {
+        dependsOn('checkReleaseSigning')
     }
 }
 
@@ -115,8 +139,11 @@ tasks.register('signRelease') {
 }
 
 dependencies {
-    compileOnly files('../local-libs/libxposed-api-102.0.0.aar')
+    implementation project(':shared')
+    runtimeOnly project(':hook')
     implementation 'androidx.activity:activity-compose:1.12.4'
     implementation 'androidx.compose.animation:animation:1.11.2'
-    implementation 'top.yukonga.miuix.kmp:miuix-ui:0.9.3'
+    implementation 'androidx.emoji2:emoji2:1.4.0'
+    implementation 'androidx.startup:startup-runtime:1.1.1'
+    implementation 'top.yukonga.miuix.kmp:miuix-ui:0.9.4'
 }

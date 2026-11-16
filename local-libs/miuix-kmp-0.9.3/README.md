@@ -1,6 +1,6 @@
 # MIUIX KMP 0.9.3 本地副本
 
-本目录保存本项目运行时所用的 MIUIX KMP 0.9.3 Android 变体及对应 Gradle 元数据，来源为本机已解析的 Maven Central 缓存。构建仍通过标准 Maven 坐标解析，以保留其完整的传递依赖元数据；本目录用于固定审计与离线恢复证据。
+本目录保存旧版 MIUIX KMP 0.9.3 Android 变体及对应 Gradle 元数据，作为依赖审计与回滚材料。当前构建使用 Maven Central 的 `top.yukonga.miuix.kmp:miuix-ui:0.9.4`，本目录不参与依赖解析。
 
 - `miuix-ui-android-miuix-ui.aar`
   - SHA-256: `FB1B8150FBBD1A7B8E357BCA8D302B4EAA115C0C2F6D069CE9912A5CE855A556`
